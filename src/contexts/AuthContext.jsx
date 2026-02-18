@@ -8,15 +8,29 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const session = supabase.auth.getSession().then(({ data: { session } }) => {
-            // console.log('Initial Session Check:', session?.user?.email || 'No user');
+        const session = supabase.auth.getSession().then(({ data: { session }, error }) => {
+            if (error || !session) {
+                if (window.location.hash && window.location.hash.includes('access_token')) {
+                    
+                    const newUrl = window.location.href.split('#')[0];
+                    window.history.replaceState(null, '', newUrl);
+                }
+            }
+
             setUser(session?.user ?? null);
             setLoading(false);
         });
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             (event, session) => {
-                // console.log('Auth State Changed:', event, session?.user?.email || 'No user');
+
+                if (window.location.hash && window.location.hash.includes('access_token')) {
+                    if (['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED', 'SIGNED_OUT'].includes(event)) {
+                        const newUrl = window.location.href.split('#')[0];
+                        window.history.replaceState(null, '', newUrl);
+                    }
+                }
+
                 setUser(session?.user ?? null);
                 setLoading(false);
             }
@@ -32,7 +46,7 @@ export const AuthProvider = ({ children }) => {
             try {
                 await supabase.auth.signOut();
             } catch (error) {
-                console.warn('Supabase SignOut error (likely already signed out):', error);
+            
             } finally {
                 setUser(null);
             }

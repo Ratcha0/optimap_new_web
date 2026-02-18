@@ -6,7 +6,7 @@ export const ToastProvider = ({ children }) => {
     const [toasts, setToasts] = useState([]);
 
     const showToast = useCallback((message, type = 'info', duration = 4000) => {
-        const id = Date.now();
+        const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         setToasts(prev => [...prev, { id, message, type, duration }]);
 
         if (duration !== Infinity) {
@@ -23,34 +23,33 @@ export const ToastProvider = ({ children }) => {
     return (
         <ToastContext.Provider value={{ showToast }}>
             {children}
-            <div className="fixed top-24 right-6 left-6 md:left-auto md:w-96 z-[100000] flex flex-col gap-3 pointer-events-none">
+            <div className="fixed top-14 sm:top-24 right-4 left-4 sm:left-auto sm:w-80 z-[100000] flex flex-col gap-2 pointer-events-none">
                 {toasts.map(toast => (
                     <div
                         key={toast.id}
                         className={`
-                            pointer-events-auto flex items-center gap-4 p-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border backdrop-blur-3xl overflow-hidden relative group
+                            pointer-events-auto flex items-center gap-3 p-3 rounded-xl shadow-xl border backdrop-blur-3xl overflow-hidden relative group
                             animate-in slide-in-from-top-4 fade-in duration-300
                             ${getBgClass(toast.type)}
                         `}
                         onClick={() => removeToast(toast.id)}
                     >
+                        <div className="absolute bottom-0 left-0 h-0.5 bg-white/20 w-full animate-[progress_linear_forwards]" style={{ animationDuration: `${toast.duration}ms` }}></div>
 
-                        <div className="absolute bottom-0 left-0 h-1 bg-white/20 w-full animate-[progress_linear_forwards]" style={{ animationDuration: `${toast.duration}ms` }}></div>
-
-                        <div className={`p-2.5 rounded-xl ${getIconBgClass(toast.type)} shadow-inner`}>
+                        <div className={`p-1.5 rounded-lg ${getIconBgClass(toast.type)} shadow-inner shrink-0`}>
                             {getIcon(toast.type)}
                         </div>
-                        <div className="flex-grow">
-                            <p className={`text-[15px] font-black uppercase tracking-widest opacity-60 mb-0.5 ${getTextClass(toast.type)}`}>
-                                {toast.type === 'error' ? 'Something went wrong' : toast.type === 'success' ? 'Operation Complete' : 'แจ้งเตือน'}
+                        <div className="flex-grow min-w-0">
+                            <p className={`text-[10px] font-black uppercase tracking-widest opacity-60 mb-0.5 ${getTextClass(toast.type)}`}>
+                                {toast.type === 'error' ? 'Something went wrong' : toast.type === 'success' ? 'SUCCESS' : 'NOTICE'}
                             </p>
-                            <p className="text-sm font-bold text-gray-800 pr-4 leading-tight">
+                            <p className="text-[11px] font-bold text-gray-800 pr-2 leading-tight">
                                 {toast.message}
                             </p>
                         </div>
-                        <button className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-black/5 active:scale-90">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                        <button className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-black/5 active:scale-90 shrink-0">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
                     </div>

@@ -199,7 +199,16 @@ export default function AuthModal({ isOpen, onClose }) {
                 <button
                     onClick={async () => {
                         try {
-                            const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+                            const { error } = await supabase.auth.signInWithOAuth({ 
+                                provider: 'google', 
+                                options: { 
+                                    redirectTo: window.location.origin,
+                                    queryParams: {
+                                        access_type: 'offline',
+                                        prompt: 'select_account',
+                                    },
+                                } 
+                            });
                             if (error) throw error;
                         } catch (error) { setError(error.message); }
                     }}

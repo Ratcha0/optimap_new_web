@@ -3,6 +3,8 @@ import L from 'leaflet';
 import { calculateDistance } from '../utils/geoUtils';
 import { formatTime, translateInstruction } from '../utils/mapUtils';
 import { ROUTING_API } from '../constants/api';
+import { prefetchRouteTiles } from '../utils/prefetchUtils';
+import { logger } from '../utils/logger';
 
 export const useRouting = ({
     startPoint,
@@ -25,6 +27,8 @@ export const useRouting = ({
     const [navigationSteps, setNavigationSteps] = useState([]);
     const [visitOrder, setVisitOrder] = useState({});
     const [legTargetIndices, setLegTargetIndices] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState(null);
     const lastWaypointsRef = useRef("");
     const lastRoutedPos = useRef(null);
     const clearRoute = useCallback(() => {
@@ -74,6 +78,11 @@ export const useRouting = ({
             indices.push(-2);
         }
 
+        if (coords.length < 2) {
+            if (routePath.length > 0) clearRoute();
+            return;
+        }
+
         const inputIndicesMap = indices;
         const coordStr = coords.map(p => `${p[1]},${p[0]}`).join(';');
         const apiMode = travelMode === 'motorbike' ? 'driving' : travelMode;
@@ -83,20 +92,26 @@ export const useRouting = ({
         if (apiMode === 'foot') baseUrl = ROUTING_API.OSM_FOOT;
 
         let service = (tripType === 'roundtrip' && !isNavigating) ? 'trip' : 'route';
-        let options = `&steps=true&geometries=geojson`;
-        if (service === 'trip') options += `&roundtrip=true&source=first`;
+        const options = `steps=true&geometries=geojson&overview=full`;
 
         const fetchRoute = async (url) => {
             const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             if (data.code !== 'Ok') throw new Error(data.code);
             return data;
         };
 
-        const primaryUrl = `${baseUrl}/${service}/v1/driving/${coordStr}?overview=false${options}`;
-        const fallbackUrl = `${ROUTING_API.OSRM_GENERIC}/${service}/v1/driving/${coordStr}?overview=false${options}`;
+        const primaryUrl = `${baseUrl}/${service}/v1/driving/${coordStr}?${options}`;
+        const fallbackUrl = `${ROUTING_API.OSRM_GENERIC}/${service}/v1/driving/${coordStr}?${options}`;
+
+        setIsLoading(true);
+        setError(null);
 
         const processData = (data) => {
+            if (!data || (!data.trips && !data.routes)) {
+                throw new Error("Invalid route data format");
+            }
             lastRoutedPos.current = startPoint;
             let legs, sortedOriginalIndices, totalDistance = 0, totalSecs = 0;
             const adjustTime = (sec) => travelMode === 'motorbike' ? sec * 0.7 : sec;
@@ -155,6 +170,7 @@ export const useRouting = ({
 
                 setRouteLegs(newLegs);
                 setRoutePath(allCoords);
+                prefetchRouteTiles(allCoords);
                 setSegments(legInfos);
                 setDistance((totalDistance / 1000).toFixed(2));
                 setTotalDuration(formatTime(totalSecs));
@@ -166,10 +182,18 @@ export const useRouting = ({
 
         fetchRoute(primaryUrl)
             .then(processData)
-            .catch(() => {
+            .catch((err) => {
+                logger.warn("Primary routing failed", { url: primaryUrl, error: err.message });
                 fetchRoute(fallbackUrl)
                     .then(processData)
-                    .catch(err => console.error("All routing attempts failed:", err));
+                    .catch((err) => {
+                        logger.error(err, { context: "Route fetch failed", url: fallbackUrl });
+                        setError(err.message);
+                        setIsLoading(false);
+                    });
+            })
+            .finally(() => {
+                if (service !== 'trip') setIsLoading(false);
             });
     }, [startPoint, waypoints, locationNames, travelMode, tripType, isNavigating, rerouteTrigger, completedWaypoints, originalStart, currentLegIndex, setRerouteTrigger, clearRoute, routePath.length]);
 
@@ -182,6 +206,8 @@ export const useRouting = ({
         navigationSteps,
         visitOrder,
         legTargetIndices,
-        clearRoute
+        clearRoute,
+        isLoading,
+        error
     };
 };

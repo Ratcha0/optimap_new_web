@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { findClosestPointOnRoute, calculateDistance } from '../utils/geoUtils';
+import L from 'leaflet';
+import { findClosestPointOnRoute, calculateDistance, calculateBearing } from '../utils/geoUtils';
 
 export const useNavigation = ({
     routePath,
@@ -16,13 +17,18 @@ export const useNavigation = ({
     isAutoSnapPaused,
     setCurrentLegIndex,
     waypoints,
-    onLegComplete
+    onLegComplete,
+    is3D
 }) => {
     const [isNavigating, setIsNavigating] = useState(false);
     const [simInterval, setSimInterval] = useState(null);
     const watchIdRef = useRef(null);
     const currentPointIndexRef = useRef(0);
     const [currentPointIndex, setCurrentPointIndex] = useState(0);
+    const [eta, setEta] = useState(0);
+    const [remainingDistance, setRemainingDistance] = useState(0);
+    const [nextManeuver, setNextManeuver] = useState(null);
+    const [secondNextManeuver, setSecondNextManeuver] = useState(null);
     const offRouteCount = useRef(0);
     const minDistToLegEnd = useRef(Infinity);
     const lastCheckLeg = useRef(-1);
@@ -30,8 +36,26 @@ export const useNavigation = ({
     const currentPosRef = useRef(null);
     const lastHeadingRef = useRef(0);
     const lastVoiceTimeRef = useRef(0);
+    const lastSignalTimeRef = useRef(Date.now());
+    const lastRerouteTimeRef = useRef(0);
+    const lastKnownSpeedRef = useRef(0);
+    const deadReckoningIntervalRef = useRef(null);
     const isAutoSnapPausedRef = useRef(isAutoSnapPaused);
-    useEffect(() => { isAutoSnapPausedRef.current = isAutoSnapPaused; }, [isAutoSnapPaused]);
+    const is3DRef = useRef(is3D);
+
+    useEffect(() => { 
+        isAutoSnapPausedRef.current = isAutoSnapPaused; 
+    }, [isAutoSnapPaused]);
+
+    useEffect(() => {
+        is3DRef.current = is3D;
+    }, [is3D]);
+
+    useEffect(() => { 
+        if (!isAutoSnapPaused && currentPosRef.current && isNavigating) {
+            syncMap(currentPosRef.current[0], currentPosRef.current[1], lastHeadingRef.current);
+        }
+    }, [isAutoSnapPaused, isNavigating]);
     const routePathRef = useRef(routePath);
     const routeLegsRef = useRef(routeLegs);
     const navigationStepsRef = useRef(navigationSteps);
@@ -98,7 +122,7 @@ export const useNavigation = ({
                     setVisitedIndices(newSet);
                 }
 
-                // console.log(`Arrived at Leg ${currentLeg} end. (Final: ${isFinalLeg})`);
+                
 
                 if (onLegCompleteRef.current) onLegCompleteRef.current(currentLeg);
                 const msg = isFinalLeg ? "ถึงจุดหมายปลายทางแล้วค่ะ" : "ถึงจุดหมายแล้วค่ะ";
@@ -108,6 +132,28 @@ export const useNavigation = ({
                 lastFinishedLegRef.current = currentLeg;
             }
         }
+    };
+
+    const calculateETA = (currentIndex, speed) => {
+        const path = routePathRef.current;
+        if (!path || path.length === 0 || currentIndex >= path.length - 1) {
+            setRemainingDistance(0);
+            setEta(0);
+            return;
+        }
+
+        let totalDist = 0;
+        for (let i = currentIndex; i < path.length - 1; i++) {
+            totalDist += calculateDistance(path[i][0], path[i][1], path[i + 1][0], path[i + 1][1]);
+        }
+
+        setRemainingDistance(totalDist);
+
+        const currentSpeedKmh = speed || 0;
+        const effectiveSpeed = currentSpeedKmh > 5 ? currentSpeedKmh : 25;
+        const timeHours = (totalDist / 1000) / effectiveSpeed;
+        const timeMinutes = Math.ceil(timeHours * 60);
+        setEta(timeMinutes);
     };
 
     const checkVoiceGuidance = (lat, lng, currentIndex) => {
@@ -135,6 +181,27 @@ export const useNavigation = ({
                 const maneuverLng = nextStep.maneuver.location[0];
                 const instructions = nextStep.instruction;
                 const distToManeuver = calculateDistance(lat, lng, maneuverLat, maneuverLng);
+                
+                setNextManeuver({
+                    type: nextStep.maneuver.type,
+                    modifier: nextStep.maneuver.modifier,
+                    distance: distToManeuver,
+                    instruction: instructions,
+                    afterDistance: nextStep.distance
+                });
+
+                if (currentStepIdx < currentSteps.length - 2) {
+                    const followingStep = currentSteps[currentStepIdx + 2];
+                    setSecondNextManeuver({
+                        type: followingStep.maneuver.type,
+                        modifier: followingStep.maneuver.modifier,
+                        instruction: followingStep.instruction,
+                        distance: nextStep.distance
+                    });
+                } else {
+                    setSecondNextManeuver(null);
+                }
+
                 let triggerType = null;
                 let textToSpeak = "";
 
@@ -147,20 +214,33 @@ export const useNavigation = ({
                 } else if (distToManeuver < 500 && distToManeuver > 450) {
                     triggerType = 'far';
                     textToSpeak = `อีก 500 เมตร ${instructions}`;
+                } else if (distToManeuver < 1050 && distToManeuver > 950) {
+                    triggerType = 'very_far';
+                    textToSpeak = `อีก 1 กิโลเมตร ${instructions}`;
+                } else if (distToManeuver < 2050 && distToManeuver > 1950) {
+                    triggerType = 'extremely_far';
+                    textToSpeak = `อีก 2 กิโลเมตร ${instructions}`;
                 }
 
                 if (currentStepIdx !== lastSpokenStepIdx.current) {
+                    if (lastSpokenStepIdx.current !== -1) {
+                        const dist = currentStep.distance;
+                        if (dist > 2000) {
+                            speak(`เลี้ยวเรียบร้อย ขับต่อไปอีก ${(dist / 1000).toFixed(1)} กิโลเมตรค่ะ`);
+                        }
+                    }
                     lastSpokenType.current = null;
                     lastSpokenStepIdx.current = currentStepIdx;
                 }
 
                 if (triggerType && triggerType !== lastSpokenType.current) {
                     if (triggerType === 'near' && lastSpokenType.current === 'near') return;
-                    // console.log(`Speaking: [${triggerType}] ${textToSpeak}`);
                     speak(textToSpeak);
                     lastSpokenType.current = triggerType;
                 }
             } else {
+                setNextManeuver(null);
+                setSecondNextManeuver(null);
                 if (routePath && routePath.length > 0) {
                     const lastPoint = routePath[routePath.length - 1];
                     const dist = calculateDistance(lat, lng, lastPoint[0], lastPoint[1]);
@@ -173,28 +253,122 @@ export const useNavigation = ({
         }
     };
 
-    const syncMap = (lat, lng, heading) => {
-        if (!mapInstance || isAutoSnapPausedRef.current) return;
 
+
+    const pendingUpdateRef = useRef(null);
+    const rafIdRef = useRef(null);
+    const lastUpdateTimeRef = useRef(0);
+
+
+    const performMapUpdate = (lat, lng, heading, force) => {
+        
+        if (!mapInstance || !mapInstance.getContainer()) return;
+        
         try {
-            const container = mapInstance.getContainer();
-            if (!container || !document.body.contains(container)) return;
-
             const currentZoom = mapInstance.getZoom();
-            const targetZoom = currentZoom < 17 ? 18 : currentZoom;
+           
+            if (currentZoom === undefined) return;
 
-            mapInstance.setView([lat, lng], targetZoom, {
+            let idealZoom = 18;
+            if (lastKnownSpeedRef.current > 16.6) idealZoom = 16; 
+            else if (lastKnownSpeedRef.current > 8.3) idealZoom = 17;
+
+            const targetZoom = force ? Math.max(currentZoom, idealZoom) : (currentZoom < idealZoom ? idealZoom : currentZoom);
+
+            let targetCenter = [lat, lng];
+            const shouldUse3D = is3DRef.current;
+            const offsetPixels = shouldUse3D ? window.innerHeight * 0.1 : window.innerHeight * 0.15;
+            
+           
+            try {
+                const point = mapInstance.project([lat, lng], targetZoom);
+                if (!point) return;
+
+                if (heading !== undefined) {
+                    const rad = (heading * Math.PI) / 180;
+                    point.x += offsetPixels * Math.sin(rad);
+                    point.y -= offsetPixels * Math.cos(rad);
+                } else {
+                    point.y -= offsetPixels;
+                }
+
+                targetCenter = mapInstance.unproject(point, targetZoom);
+            } catch (projError) {
+                targetCenter = [lat, lng];
+            }
+
+            const options = {
                 animate: true,
-                duration: 1.2,
-                easeLinearity: 0.1
-            });
+                duration: force ? 0.6 : 0.2, 
+                easeLinearity: 1.0, 
+                noMoveStart: true, 
+                hard: true 
+            };
 
-            if (typeof mapInstance.setBearing === 'function' && heading !== undefined && heading !== null) {
-                mapInstance.setBearing(360 - heading);
+           
+            if (force) {
+                mapInstance.flyTo(targetCenter, targetZoom, options);
+            } else {
+                mapInstance.setView(targetCenter, targetZoom, {
+                    ...options,
+                    animate: false,
+                });
+            }
+
+            if (heading !== undefined && heading !== null) {
+                if (typeof mapInstance.setBearing === 'function') {
+                    const currentBearing = mapInstance.getBearing ? mapInstance.getBearing() : 0;
+                    const targetBearing = 360 - heading;
+                    const diff = Math.abs(currentBearing - targetBearing);
+                    
+                    if (diff > 180) {
+                         mapInstance.setBearing(targetBearing);
+                    } else {
+                        mapInstance.setBearing(targetBearing);
+                    }
+                }
             }
         } catch (error) {
-            console.debug("Map sync skipped:", error.message);
+          
+            if (error.message && error.message.includes('_leaflet_pos')) {
+                return;
+            }
+            console.error("syncMap error:", error);
         }
+    };
+
+    const processMapUpdate = () => {
+        if (pendingUpdateRef.current) {
+            const { lat, lng, heading, force } = pendingUpdateRef.current;
+            performMapUpdate(lat, lng, heading, force);
+            pendingUpdateRef.current = null;
+        }
+        rafIdRef.current = null;
+    };
+
+    const syncMap = (lat, lng, heading, force = false) => {
+        if (!mapInstance) return;
+        if (!force && isAutoSnapPausedRef.current) return;
+        
+   
+        const now = Date.now();
+        if (!force && now - lastUpdateTimeRef.current < 33) {
+             pendingUpdateRef.current = { lat, lng, heading, force };
+             if (!rafIdRef.current) {
+                 rafIdRef.current = requestAnimationFrame(processMapUpdate);
+             }
+             return;
+        }
+
+        lastUpdateTimeRef.current = now;
+        
+       
+        if (rafIdRef.current) {
+            cancelAnimationFrame(rafIdRef.current);
+            rafIdRef.current = null;
+        }
+        
+        performMapUpdate(lat, lng, heading, force);
     };
 
     const stopNavigation = useCallback(() => {
@@ -202,6 +376,8 @@ export const useNavigation = ({
         if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
         if (simInterval) clearInterval(simInterval);
         setSimInterval(null);
+        setNextManeuver(null);
+        setSecondNextManeuver(null);
     }, [simInterval]);
 
     const startNavigation = useCallback(() => {
@@ -219,8 +395,31 @@ export const useNavigation = ({
         setCurrentPointIndex(0);
         if (setCurrentLegIndex) setCurrentLegIndex(0);
 
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    currentPosRef.current = [lat, lng];
+                    setStartPoint([lat, lng]);
+                    syncMap(lat, lng, lastHeadingRef.current, true);
+                },
+                null,
+                { enableHighAccuracy: true, timeout: 5000 }
+            );
+        }
+
         if (routePath.length > 0 && mapInstance) {
-            mapInstance.setView(routePath[0], 20);
+            if (currentPosRef.current) {
+                syncMap(currentPosRef.current[0], currentPosRef.current[1], lastHeadingRef.current, true);
+            } else {
+                mapInstance.setView(routePath[0], 20);
+            }
+            
+            if (navigationSteps && navigationSteps.length > 0) {
+                const firstStep = navigationSteps[0];
+                speak(`เริ่มการนำทางค่ะ ${firstStep.instruction}`);
+            }
         }
 
         if ("geolocation" in navigator) {
@@ -240,12 +439,15 @@ export const useNavigation = ({
                         heading = lastHeadingRef.current;
                     }
 
+                    lastKnownSpeedRef.current = speed;
+                    lastSignalTimeRef.current = Date.now();
                     setCurrentSpeed(speed);
                     if (heading !== null && !isNaN(heading)) setCurrentHeading(heading);
+                    currentPosRef.current = [lat, lng];
 
                     if (isWaitingRef.current) {
                         setStartPoint([lat, lng]);
-                        syncMap(lat, lng, heading);
+                        
                     }
 
                     let closestIndex = -1;
@@ -255,15 +457,26 @@ export const useNavigation = ({
                         const { point, distance, index } = findClosestPointOnRoute(lat, lng, heading, currentPath);
                         closestIndex = index;
 
-                        if (point && distance <= 25) {
+                        if (point && distance <= 45) {
                             lat = point[0];
                             lng = point[1];
                             offRouteCount.current = 0;
+                            currentPosRef.current = [lat, lng];
+                            
+                            if (index < currentPath.length - 1) {
+                                const roadBearing = calculateBearing(currentPath[index][0], currentPath[index][1], currentPath[index+1][0], currentPath[index+1][1]);
+                                heading = roadBearing;
+                                lastHeadingRef.current = roadBearing;
+                                setCurrentHeading(roadBearing);
+                            }
                         } else {
-                            if (!isWaitingRef.current) {
+                            const now = Date.now();
+                           
+                            if (!isWaitingRef.current && (now - lastRerouteTimeRef.current > 10000)) {
                                 offRouteCount.current += 1;
-                                if (offRouteCount.current >= 3) {
+                                if (offRouteCount.current >= 5) {
                                     offRouteCount.current = 0;
+                                    lastRerouteTimeRef.current = now;
                                     if (onReroute) onReroute(lat, lng);
                                 }
                             }
@@ -273,7 +486,9 @@ export const useNavigation = ({
                     syncMap(lat, lng, heading);
 
                     if (closestIndex !== -1) {
+                        currentPointIndexRef.current = closestIndex;
                         setCurrentPointIndex(closestIndex);
+                        calculateETA(closestIndex, speed);
                         if (!isWaitingRef.current) {
                             checkVoiceGuidance(lat, lng, closestIndex);
                         }
@@ -281,7 +496,7 @@ export const useNavigation = ({
 
                     setStartPoint([lat, lng]);
                 },
-                (err) => console.error(err),
+                (err) => {},
                 { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
             );
         }
@@ -306,8 +521,18 @@ export const useNavigation = ({
         setCurrentPointIndex(0);
         simIndexRef.current = 0;
         if (setCurrentLegIndex) setCurrentLegIndex(0);
-        if (mapInstance && currentPath.length > 0) mapInstance.setView([currentPath[0][0], currentPath[0][1]], 18);
+        if (mapInstance && currentPath.length > 0) {
+            const p0 = currentPath[0];
+            const p1 = currentPath[Math.min(1, currentPath.length - 1)];
+            const initBearing = calculateBearing(p0[0], p0[1], p1[0], p1[1]);
+            setStartPoint([p0[0], p0[1]]);
+            currentPosRef.current = [p0[0], p0[1]];
+            setCurrentHeading(initBearing);
+            performMapUpdate(p0[0], p0[1], initBearing, true);
+        }
         if (simInterval) clearInterval(simInterval);
+
+        setTimeout(() => {
         const interval = setInterval(() => {
             const latestPath = routePathRef.current;
             if (!latestPath || latestPath.length === 0) {
@@ -360,11 +585,14 @@ export const useNavigation = ({
             syncMap(p1[0], p1[1], bearing);
             checkVoiceGuidance(p1[0], p1[1], idx);
             setCurrentPointIndex(idx);
+            currentPointIndexRef.current = idx;
+            calculateETA(idx, 30);
 
             simIndexRef.current++;
         }, 2000);
 
         setSimInterval(interval);
+        }, 1500);
     }, [simInterval, setStartPoint, setCurrentHeading, setCurrentSpeed, mapInstance, isAutoSnapPaused, stopNavigation, isWaitingForContinue]);
 
     const continueNavigation = useCallback(() => {
@@ -393,6 +621,64 @@ export const useNavigation = ({
         speak("กำลังคำนวณเส้นทางใหม่จากตำแหน่งปัจจุบันค่ะ");
     }, [speak, onReroute, mapInstance]);
 
+    useEffect(() => {
+        if (!isNavigating) {
+            if (deadReckoningIntervalRef.current) clearInterval(deadReckoningIntervalRef.current);
+            return;
+        }
+
+        deadReckoningIntervalRef.current = setInterval(() => {
+            const now = Date.now();
+            const timeSinceLastSignal = now - lastSignalTimeRef.current;
+
+            if (timeSinceLastSignal > 3000 && lastKnownSpeedRef.current > 1.3) {
+                const currentPath = routePathRef.current;
+                if (!currentPath || currentPath.length === 0) return;
+
+                const currentIndex = currentPointIndexRef.current;
+                if (currentIndex >= currentPath.length - 1) return;
+
+                const speedMps = lastKnownSpeedRef.current / 3.6;
+                const distanceToMove = speedMps * 1; 
+
+                let remainingDist = distanceToMove;
+                let newIndex = currentIndex;
+                let finalPos = currentPath[currentIndex];
+
+                while (remainingDist > 0 && newIndex < currentPath.length - 1) {
+                    const p1 = currentPath[newIndex];
+                    const p2 = currentPath[newIndex + 1];
+                    const d = calculateDistance(p1[0], p1[1], p2[0], p2[1]);
+
+                    if (remainingDist >= d) {
+                        remainingDist -= d;
+                        newIndex++;
+                        finalPos = p2;
+                    } else {
+                        const ratio = remainingDist / d;
+                        finalPos = [
+                            p1[0] + (p2[0] - p1[0]) * ratio,
+                            p1[1] + (p2[1] - p1[1]) * ratio
+                        ];
+                        remainingDist = 0;
+                    }
+                }
+
+                if (newIndex !== currentIndex || remainingDist === 0) {
+                    currentPointIndexRef.current = newIndex;
+                    setCurrentPointIndex(newIndex);
+                    setStartPoint(finalPos);
+                    syncMap(finalPos[0], finalPos[1], lastHeadingRef.current);
+                    checkVoiceGuidance(finalPos[0], finalPos[1], newIndex);
+                }
+            }
+        }, 1000);
+
+        return () => {
+            if (deadReckoningIntervalRef.current) clearInterval(deadReckoningIntervalRef.current);
+        };
+    }, [isNavigating, setStartPoint, setCurrentPointIndex, speak]);
+
     return {
         isNavigating,
         startNavigation,
@@ -400,7 +686,16 @@ export const useNavigation = ({
         stopNavigation,
         visitedIndices,
         currentPointIndex,
+        eta,
+        remainingDistance,
+        nextManeuver,
+        secondNextManeuver,
         isWaitingForContinue,
-        continueNavigation
+        continueNavigation,
+        syncMap: (force = false) => {
+            if (currentPosRef.current) {
+                syncMap(currentPosRef.current[0], currentPosRef.current[1], lastHeadingRef.current, force);
+            }
+        }
     };
 };

@@ -2,9 +2,9 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '../../utils/supabaseClient';
 import { useWakeLock } from '../../hooks/useWakeLock';
 import { useNavigation } from '../../hooks/useNavigation';
-import { useFavorites } from '../../hooks/useFavorites';
 import { useRouting } from '../../hooks/useRouting';
 import { useTechnicianData } from '../../hooks/useTechnicianData';
+import { useCarStatusSimulator } from '../../hooks/useCarStatusSimulator';
 import { reverseGeocode, parseCoordinateUrl } from '../../utils/mapUtils';
 import { speak } from '../../utils/voiceUtils';
 import { MAP_CONFIG } from '../../constants/visuals';
@@ -20,8 +20,11 @@ import JobListView from './technician/JobListView';
 import { useToast } from '../ui/ToastNotification';
 import TechnicianHeader from './technician/TechnicianHeader';
 import TechnicianMap from './technician/TechnicianMap';
+import TeamInviteModal from '../modals/TeamInviteModal';
 import ArrivalOverlay from './technician/ArrivalOverlay';
 import AuthModal from '../modals/AuthModal';
+import TeamInviteNotification from '../ui/TeamInviteNotification';
+import { useTeamManager } from '../../hooks/useTeamManager';
 
 export default function TechnicianView({ user, userProfile, sharedLocation }) {
 
@@ -41,8 +44,14 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         }
     }, [sharedLocation, mapInstance]);
     const [currentHeading, setCurrentHeading] = useState(0);
-    const [waypoints, setWaypoints] = useState([null]);
-    const [locationNames, setLocationNames] = useState({});
+    const [waypoints, setWaypoints] = useState(() => {
+        const saved = localStorage.getItem('tech_waypoints');
+        return saved ? JSON.parse(saved) : [null];
+    });
+    const [locationNames, setLocationNames] = useState(() => {
+        const saved = localStorage.getItem('tech_location_names');
+        return saved ? JSON.parse(saved) : {};
+    });
     const [activeSelection, setActiveSelection] = useState(null);
     const [searchResult, setSearchResult] = useState(null);
     const [activeMenu, setActiveMenu] = useState(null);
@@ -58,33 +67,61 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
     const [rerouteTrigger, setRerouteTrigger] = useState(0);
     const [autoSnapPaused, setAutoSnapPaused] = useState(false);
     const [isImmersive, setIsImmersive] = useState(false);
-    const [travelMode, setTravelMode] = useState('driving');
+    const [travelMode, setTravelMode] = useState(() => localStorage.getItem('tech_travel_mode') || 'driving');
     const [currentSpeed, setCurrentSpeed] = useState(0);
     const [originalStart, setOriginalStart] = useState(null);
     const [viewMode, setViewMode] = useState('map');
-    const [otherTechs, setOtherTechs] = useState([]);
+    const [activeInviteTicket, setActiveInviteTicket] = useState(null);
+    const [isInviteOpen, setIsInviteOpen] = useState(false);
+    const [view3D, setView3D] = useState(false);
     const { showToast } = useToast();
-    const { favorites, addFavorite, isFavorite } = useFavorites();
+    const {
+        otherTechs,
+        myAssignment,
+        pendingInvite,
+        setPendingInvite,
+        handleAcceptInvite,
+        handleDeclineInvite
+    } = useTeamManager(user, setViewMode);
+
     const {
         pendingJobsCount,
         unreadMessagesCount,
         setUnreadMessagesCount,
-        syncPosition
+        syncPosition,
+        carStatus,
+        isOnline
     } = useTechnicianData(user);
 
     const startPointRef = useRef(startPoint);
     useEffect(() => { startPointRef.current = startPoint; }, [startPoint]);
 
 
-
     const [navActive, setNavActive] = useState(false);
+
     const {
         routeLegs, routePath, segments, distance, totalDuration, navigationSteps,
-        visitOrder, legTargetIndices, clearRoute
+        visitOrder, legTargetIndices, clearRoute, isLoading: isRouting, error: routingError
     } = useRouting({
         startPoint, waypoints, locationNames, travelMode, tripType, isNavigating: navActive,
         rerouteTrigger, setRerouteTrigger, completedWaypoints, originalStart, currentLegIndex
     });
+
+    useEffect(() => {
+        localStorage.setItem('tech_waypoints', JSON.stringify(waypoints));
+    }, [waypoints]);
+
+    useEffect(() => {
+        localStorage.setItem('tech_location_names', JSON.stringify(locationNames));
+    }, [locationNames]);
+
+    useEffect(() => {
+        localStorage.setItem('tech_travel_mode', travelMode);
+    }, [travelMode]);
+
+    useEffect(() => {
+        localStorage.setItem('tech_trip_type', tripType);
+    }, [tripType]);
 
     const handleReroute = useCallback((newLat, newLng) => {
         clearRoute();
@@ -109,8 +146,15 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         routePath, routeLegs, navigationSteps, speak, setStartPoint, setCurrentSpeed,
         setCurrentHeading, setLocationNames, onReroute: handleReroute,
         setCurrentInstruction, mapInstance, isAutoSnapPaused: autoSnapPaused,
-        setCurrentLegIndex, waypoints, onLegComplete: handleLegComplete
+        setCurrentLegIndex, waypoints, onLegComplete: handleLegComplete,
+        is3D: view3D
     });
+
+    useEffect(() => {
+        if (routingError) {
+            showToast(`ไม่สามารถคำนวณเส้นทางได้: ${routingError}`, 'error');
+        }
+    }, [routingError, showToast]);
 
     const {
         isNavigating,
@@ -118,12 +162,27 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         simulateNavigation: hookSimNav,
         stopNavigation: hookStopNav,
         currentPointIndex,
+        eta,
+        remainingDistance,
+        nextManeuver,
+        secondNextManeuver,
         isWaitingForContinue,
-        continueNavigation
+        continueNavigation,
+        syncMap: triggerSync
     } = nav;
 
     useEffect(() => { setNavActive(isNavigating); }, [isNavigating]);
+    
+    useEffect(() => {
+        if (isNavigating) {
+            setView3D(true);
+        } else {
+            setView3D(false);
+        }
+    }, [isNavigating]);
+
     useWakeLock(isNavigating);
+    useCarStatusSimulator(user, userProfile, isNavigating, currentSpeed, { eta, distance_remaining: remainingDistance });
     const [liveDistance, setLiveDistance] = useState(null);
     const [liveDuration, setLiveDuration] = useState(null);
 
@@ -141,51 +200,44 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         setLiveDuration(formatTime(adjustTime(estimatedSeconds)));
     }, [isNavigating, distance, totalDuration, routePath, currentPointIndex, travelMode]);
 
-    const fetchOtherTechs = useCallback(async () => {
-        if (!user) {
-            setOtherTechs([]);
-            return;
-        }
-
-        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-
-        const { data } = await supabase
-            .from('profiles')
-            .select('id, full_name, last_lat, last_lng, avatar_url, role, last_updated, phone, team_name, car_reg')
-            .eq('role', 'technician')
-            .neq('id', user.id)
-            .not('last_lat', 'is', null)
-            .gte('last_updated', tenMinutesAgo)
-            .limit(20);
-
-        setOtherTechs(data || []);
-    }, [user]);
-
-    useEffect(() => {
-        fetchOtherTechs();
-        const interval = setInterval(fetchOtherTechs, 5000);
-        return () => clearInterval(interval);
-    }, [fetchOtherTechs]);
+    const handleOpenInvite = useCallback((ticket) => {
+        setActiveInviteTicket(ticket);
+        setIsInviteOpen(true);
+    }, []);
 
 
     useEffect(() => {
-        if (!user || isNavigating) return;
+        if (isNavigating) return;
+
+       
+        navigator.geolocation.getCurrentPosition(
+            (pos) => setStartPoint([pos.coords.latitude, pos.coords.longitude]),
+            null,
+            { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+        );
 
         const watchId = navigator.geolocation.watchPosition(
             (pos) => {
                 const { latitude, longitude, heading, speed } = pos.coords;
+              
                 setStartPoint([latitude, longitude]);
                 if (heading !== null && !isNaN(heading)) setCurrentHeading(heading);
                 setCurrentSpeed(speed || 0);
             },
-            (err) => console.debug("GPS Watch error:", err),
-            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+            (err) => {
+                if (err.code !== 3) console.warn("Location update failed:", err.message);
+            },
+            { 
+                enableHighAccuracy: true, 
+                timeout: 20000, 
+                maximumAge: 5000 
+            }
         );
 
         return () => navigator.geolocation.clearWatch(watchId);
-    }, [user, isNavigating]);
+    }, [isNavigating]);
 
-    // Auto-clear route when arriving at destination (within 20 meters) - Consistent with Customer View
+
     useEffect(() => {
         if (!isNavigating && startPoint && waypoints.length > 0 && waypoints[0]) {
             const dest = waypoints[0];
@@ -263,6 +315,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
 
     const handleLocationSelect = useCallback((type, coords) => {
         if (!type || typeof type !== 'string') return;
+        
         if (type === 'start') {
             setStartPoint(coords);
             updateLocationName('start', coords[0], coords[1]);
@@ -276,6 +329,10 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
             if (coords) updateLocationName(type, coords[0], coords[1]);
 
             if (!newWps.some(w => w !== null)) clearRoute();
+        }
+        else if (type === 'home-picking') {
+            setActiveSelection({ type: 'home-picking', status: 'selecting', coords });
+            return;
         }
         setActiveSelection(null);
     }, [waypoints, updateLocationName, clearRoute]);
@@ -358,20 +415,6 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         setViewTarget({ coords, t: Date.now() });
     }, []);
 
-    const handleFavoriteView = useCallback((input) => {
-        let coords;
-        let name = "ตำแหน่งที่เลือก";
-        if (Array.isArray(input)) coords = input;
-        else if (input?.lat !== undefined) {
-            coords = [input.lat, input.lng];
-            name = input.name || name;
-        }
-
-        if (coords) {
-            setViewTarget({ coords, t: Date.now() });
-            setSearchResult({ lat: coords[0], lng: coords[1], name });
-        }
-    }, []);
 
     const addWaypoint = () => setWaypoints([...waypoints, null]);
     const removeWaypoint = (index) => {
@@ -383,14 +426,40 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
     };
 
     const useCurrentLocation = useCallback(() => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(async (pos) => {
+        if (!navigator.geolocation) {
+            showToast('เบราว์เซอร์ไม่รองรับการระบุตำแหน่ง', 'error');
+            return;
+        }
+
+        showToast('กำลังจับตำแหน่งปัจจุบัน...', 'info');
+        navigator.geolocation.getCurrentPosition(
+            async (pos) => {
                 const { latitude, longitude } = pos.coords;
+                
+                if (isNavigating) {
+                    stopNavigation();
+                    showToast('หยุดการจำลอง/นำทาง เพื่อใช้ตำแหน่งปัจจุบัน', 'warning');
+                }
+
                 setStartPoint([latitude, longitude]);
                 updateLocationName('start', latitude, longitude);
-            });
-        }
-    }, [updateLocationName]);
+                
+                
+                setAutoSnapPaused(false);
+                setViewTarget({ coords: [latitude, longitude], t: Date.now() });
+                
+                if (nav && nav.syncMap) {
+                    nav.syncMap(true);
+                }
+
+                showToast('จับตำแหน่งสำเร็จ', 'success');
+            },
+            (err) => {
+                showToast(`ไม่สามารถจับตำแหน่งได้: ${err.message}`, 'error');
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }, [updateLocationName, isNavigating, stopNavigation, mapInstance, showToast]);
 
     const handleAcceptJob = useCallback((job) => {
         if (job.lat && job.lng) {
@@ -413,16 +482,10 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         }
     }, [updateLocationName, showToast]);
 
-    if (viewMode === 'jobs') {
-        return (
-            <div className="h-screen overflow-y-auto bg-gray-50">
-                <JobListView user={user} onAcceptJob={handleAcceptJob} setViewMode={setViewMode} />
-            </div>
-        );
-    }
+
 
     return (
-        <div className="flex flex-col h-screen bg-gray-100 overflow-hidden relative">
+        <div className="flex flex-col h-screen bg-transparent overflow-hidden relative">
             <TechnicianHeader
                 title="ระบบนำทาง"
                 isImmersive={isImmersive}
@@ -432,6 +495,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                 user={user}
                 onAuthClick={() => setAuthModalOpen(true)}
                 onProfileClick={() => setProfileModalOpen(true)}
+                isOnline={isOnline}
             />
 
             <main className="flex-grow relative">
@@ -463,9 +527,17 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                     currentLegIndex={currentLegIndex}
                     currentPointIndex={currentPointIndex}
                     tripType={tripType}
-                    addFavorite={addFavorite}
-                    isFavorite={isFavorite}
+                    userProfile={userProfile}
+                    carStatus={carStatus}
+                    myAssignment={myAssignment}
+                    onOpenInvite={handleOpenInvite}
+                    onMapInteract={(type) => {
+                        if (type === 'start') setAutoSnapPaused(true);
+                    }}
+                    is3D={view3D}
                 />
+
+
 
 
 
@@ -478,14 +550,18 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                     autoSnapPaused={autoSnapPaused}
                     isImmersive={isImmersive}
                     setIsImmersive={setIsImmersive}
-                    onStopNavigation={stopNavigation}
+                    onStopNavigation={handleStopNavigation}
                     onContinueNavigation={continueNavigation}
                     onRecenter={() => setAutoSnapPaused(false)}
+                    eta={eta}
+                    remainingDistance={remainingDistance}
+                    nextManeuver={nextManeuver}
+                    secondNextManeuver={secondNextManeuver}
                 />
 
 
                 {!isNavigating && !isImmersive && !activeSelection && (
-                    <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[90%] max-w-lg z-[1000]">
+                    <div className="absolute top-14 sm:top-20 left-1/2 -translate-x-1/2 w-[90%] max-w-lg z-[1000]">
                         <SearchControl
                             onResultSelect={(res) => {
                                 setSearchResult(res);
@@ -497,28 +573,57 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                 )}
 
 
-                <button
-                    onClick={() => {
-                        if (startPoint) {
-                            mapInstance && mapInstance.flyTo(startPoint, 17);
-                        } else {
-                            useCurrentLocation();
-                        }
-                    }}
-                    className="fixed bottom-[32%] right-4 z-[9999] w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center text-blue-600 hover:bg-blue-50 transition-all active:scale-90 border border-gray-100"
-                >
-                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
-                    </svg>
-                </button>
+                <div className="fixed bottom-[15%] right-4 z-[900] flex flex-col gap-3">
+                    <button
+                        onClick={() => setView3D(!view3D)}
+                        className={`w-12 h-12 rounded-2xl shadow-xl flex items-center justify-center transition-all active:scale-90 border font-black text-xs ${
+                            view3D
+                            ? 'bg-blue-600 text-white border-blue-400' 
+                            : 'bg-white text-blue-600 border-gray-100'
+                        }`}
+                        title="สลับมุมมอง 3D"
+                    >
+                        { view3D ? '2D' : '3D' }
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            setAutoSnapPaused(false);
+                            if (isNavigating) {
+                                triggerSync(true); 
+                            } else if (startPoint) {
+                                setViewTarget({ coords: startPoint, zoom: 17, t: Date.now() });
+                                mapInstance && mapInstance.flyTo(startPoint, 17);
+                            } else {
+                                useCurrentLocation();
+                            }
+                        }}
+                        className={`w-12 h-12 rounded-2xl shadow-xl flex items-center justify-center transition-all active:scale-90 border ${
+                            !autoSnapPaused && (isNavigating || !autoSnapPaused)
+                            ? 'bg-blue-600 text-white border-blue-400' 
+                            : 'bg-white text-blue-600 border-gray-100'
+                        }`}
+                        title={!autoSnapPaused ? "กำลังติดตามตำแหน่ง" : "ล็อกตำแหน่งปัจจุบัน"}
+                    >
+                        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
+                        </svg>
+                    </button>
+                </div>
 
 
                 {activeSelection?.type === 'home-picking' && activeSelection?.status !== 'confirmed' && (
                     <MapSelectionOverlay
                         message={activeSelection.coords ? "ตำแหน่งนี้ใช่หรือไม่?" : "จิ้มตำแหน่งบ้านที่ต้องการบนแผนที่"}
+                        coords={activeSelection.coords}
                         onConfirm={() => activeSelection.coords && setActiveSelection({ ...activeSelection, status: 'confirmed' })}
                         onCancel={() => setActiveSelection(null)}
                     />
+                )}
+                {viewMode === 'jobs' && (
+                    <div className="absolute inset-0 z-[5000] bg-gray-50 overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <JobListView user={user} onAcceptJob={handleAcceptJob} setViewMode={setViewMode} />
+                    </div>
                 )}
             </main>
 
@@ -534,14 +639,17 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                     simulateNavigation={simulateNavigation} stopNavigation={handleStopNavigation} handleViewLocation={handleViewLocation}
                     useCurrentLocation={useCurrentLocation} handleUrlInput={handleUrlInput}
                     setActiveSelection={setActiveSelection} setActiveMenu={setActiveMenu}
-                    addWaypoint={addWaypoint} removeWaypoint={removeWaypoint} favorites={favorites} user={user}
-                    onViewFavorite={handleFavoriteView} onSelectFavorite={handleFavoriteView}
+                    addWaypoint={addWaypoint} removeWaypoint={removeWaypoint} user={user}
                     viewMode={viewMode} setViewMode={setViewMode} pendingJobsCount={pendingJobsCount}
                     unreadMessagesCount={unreadMessagesCount} setUnreadMessagesCount={setUnreadMessagesCount}
                     onAuthClick={() => setUrlModalOpen(false) || setAuthModalOpen(true)}
                     onUrlSubmit={handleUrlSubmit}
                     setSearchResult={setSearchResult}
                     setWaypoints={setWaypoints}
+                    carStatus={carStatus}
+                    eta={eta}
+                    remainingDistance={remainingDistance}
+                    isRouting={isRouting}
                 />
             </div>
 
@@ -558,11 +666,28 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                 onClose={() => setProfileModalOpen(false)}
                 user={user}
                 onUpdate={() => { window.location.reload(); }}
+                activeSelection={activeSelection}
+                setActiveSelection={setActiveSelection}
             />
+
+            {activeInviteTicket && (
+                <TeamInviteModal
+                    isOpen={isInviteOpen}
+                    onClose={() => setIsInviteOpen(false)}
+                    ticketId={activeInviteTicket.id}
+                    currentUser={user}
+                />
+            )}
 
             <ArrivalOverlay
                 isVisible={isWaitingForContinue}
                 onContinue={continueNavigation}
+            />
+
+            <TeamInviteNotification
+                invite={pendingInvite}
+                onAccept={handleAcceptInvite}
+                onDecline={handleDeclineInvite}
             />
         </div>
     );

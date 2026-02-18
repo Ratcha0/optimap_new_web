@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function TechnicianHeader({ title, pendingCount, onShowJobs, userProfile, user, onAuthClick, onProfileClick, isImmersive }) {
+export default function TechnicianHeader({ title, pendingCount, onShowJobs, userProfile, user, onAuthClick, onProfileClick, isImmersive, isOnline }) {
     const isUserAuthenticated = user?.role === 'authenticated';
 
     if (isImmersive) return null;
@@ -9,7 +9,14 @@ export default function TechnicianHeader({ title, pendingCount, onShowJobs, user
         <div className="fixed top-0 left-0 w-full z-[1001] animate-in slide-in-from-top duration-500">
             <header className="flex items-center justify-between px-3 sm:px-6 py-1.5 sm:py-4 bg-white text-gray-900 shadow-md relative overflow-hidden backdrop-blur-md border-b border-gray-100/50">
                 <div className="flex items-center gap-2.5 sm:gap-6 z-10">
-                    <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_15px_rgba(34,197,94,0.6)]"></div>
+                    <div className="flex items-center gap-2">
+                        <div className={`w-2.5 h-2.5 ${isOnline ? 'bg-green-500 shadow-[0_0_15px_rgba(34,197,94,0.6)]' : 'bg-red-500 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.6)]'} rounded-full`}></div>
+                        {!isOnline && (
+                            <span className="bg-red-100 text-red-600 text-[8px] sm:text-[10px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter sm:tracking-widest animate-pulse border border-red-200">
+                                Offline
+                            </span>
+                        )}
+                    </div>
                     <div className="flex flex-col">
                         <h1 className="text-xs sm:text-lg font-bold text-gray-900 tracking-wide leading-tight truncate max-w-[120px] sm:max-w-none">{title || 'Smart Tracking'}</h1>
                         <span className="text-[7px] sm:text-[10px] font-bold text-blue-500 uppercase tracking-[0.2em] mt-0.5">
@@ -34,13 +41,22 @@ export default function TechnicianHeader({ title, pendingCount, onShowJobs, user
                     {isUserAuthenticated ? (
                         <button
                             onClick={onProfileClick}
-                            className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 hover:bg-blue-500 rounded-xl sm:rounded-2xl text-white font-bold text-base sm:text-lg shadow-lg hover:shadow-blue-500/30 transition-all active:scale-95"
+                            className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 hover:bg-blue-500 rounded-xl sm:rounded-2xl text-white font-bold text-base sm:text-lg shadow-lg hover:shadow-blue-500/30 transition-all active:scale-95 overflow-hidden"
                         >
                             {userProfile?.avatar_url ? (
-                                <img src={userProfile.avatar_url} alt="Profile" className="w-full h-full object-cover rounded-xl sm:rounded-2xl" />
-                            ) : (
-                                <span>{(userProfile?.full_name || user.email?.[0] || 'T').substring(0, 1).toUpperCase()}</span>
-                            )}
+                                <img 
+                                    src={userProfile.avatar_url} 
+                                    alt="Profile" 
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                />
+                            ) : null}
+                            <span style={{ display: userProfile?.avatar_url ? 'none' : 'flex' }}>
+                                {(userProfile?.full_name || user.email?.[0] || 'T').substring(0, 1).toUpperCase()}
+                            </span>
                         </button>
                     ) : (
                         <button onClick={onAuthClick} className="flex items-center justify-center w-12 h-12 bg-gray-100 hover:bg-gray-200 rounded-2xl text-gray-400 hover:text-blue-600 transition-all active:scale-95 border border-gray-100">

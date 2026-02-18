@@ -21,7 +21,7 @@ export const useWakeLock = (active = false) => {
                     document.addEventListener('visibilitychange', handleVisibilityChange);
                 }
             } catch (err) {
-                console.warn('Wake Lock failed:', err);
+                
             }
         };
 

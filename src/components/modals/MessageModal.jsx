@@ -44,7 +44,6 @@ export default function MessageModal({ isOpen, onClose, ticketId, currentUser, o
             .order('created_at', { ascending: true });
 
         if (error) {
-            console.error('Error fetching messages:', error);
         } else {
             setMessages(data || []);
             localStorage.setItem(`last_read_ticket_${ticketId}`, new Date().toISOString());

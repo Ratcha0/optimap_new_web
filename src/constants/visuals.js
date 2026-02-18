@@ -4,7 +4,7 @@ export const APP_THEME = {
     EMERGENCY: '#EF4444',
     SUCCESS: '#10B981',
     WARNING: '#F59E0B',
-    INACTIVE: '#94A3B8',
+    INACTIVE: '#6366F1',
     DARK_GLASS: 'bg-black/40 backdrop-blur-2xl border border-white/10',
     LIGHT_GLASS: 'bg-white/80 backdrop-blur-2xl border border-white/40'
 };
@@ -17,15 +17,18 @@ export const NAVIGATION_MODES = [
 ];
 
 export const TICKET_STATUS = {
-    PENDING: { id: 'pending', label: 'รอรับงาน', color: 'text-amber-600', hex: '#D97706', bg: 'bg-amber-50' },
-    ACCEPTED: { id: 'accepted', label: 'รับงานแล้ว', color: 'text-blue-600', hex: '#2563EB', bg: 'bg-blue-50' },
-    IN_PROGRESS: { id: 'in_progress', label: 'กำลังเดินทาง', color: 'text-indigo-600', hex: '#4F46E5', bg: 'bg-indigo-50' },
+    PENDING: { id: 'pending', label: 'รอรับงาน', color: 'text-rose-600', hex: '#E11D48', bg: 'bg-rose-50' },
+    ACCEPTED: { id: 'accepted', label: 'รับงานแล้ว', color: 'text-orange-600', hex: '#EA580C', bg: 'bg-orange-50' },
+    IN_PROGRESS: { id: 'in_progress', label: 'กำลังเดินทาง', color: 'text-blue-600', hex: '#2563EB', bg: 'bg-blue-50' },
     COMPLETED: { id: 'completed', label: 'เสร็จสิ้น', color: 'text-emerald-600', hex: '#059669', bg: 'bg-emerald-50' }
 };
 export const MAP_CONFIG = {
     DEFAULT_CENTER: [12.662882, 102.080809], // Chanthaburi isuzu ตำแหน่งตอนเปิดแอพ
     DEFAULT_ZOOM: 18,
     SHARE_ZOOM: 18,
+    MAX_ZOOM: 19,
+    MIN_ZOOM: 5,
+    THAILAND_BOUNDS: [[5.61, 97.34], [20.46, 105.63]],
     BRANCHES: [
         {
             id: 'main',

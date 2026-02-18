@@ -16,11 +16,13 @@ import MyTicketsView from './customer/MyTicketsView';
 import MapSelectionOverlay from '../ui/MapSelectionOverlay';
 import CustomerHeader from './customer/CustomerHeader';
 import CustomerMap from './customer/CustomerMap';
+import technicialcar from '../../assets/technicialcar.png';
 
 export default function CustomerView({ user, sharedLocation }) {
     const { showToast } = useToast();
     const [myPosition, setMyPosition] = useState(null);
     const [mapInstance, setMapInstance] = useState(null);
+    const [autoSnapPaused, setAutoSnapPaused] = useState(false);
 
     useEffect(() => {
         if (sharedLocation && mapInstance) {
@@ -163,12 +165,23 @@ export default function CustomerView({ user, sharedLocation }) {
             }
         }
 
+        // Reverse geocode to get location name
+        let locationName = null;
+        if (issueLat && issueLng) {
+            try {
+                locationName = await reverseGeocode(issueLat, issueLng);
+            } catch (e) {
+                
+            }
+        }
+
         const ticketData = {
             user_id: user.id,
             issue_type: issueType,
             description: details,
             lat: issueLat,
             lng: issueLng,
+            location_name: locationName,
             car_reg_number: carData.car_number,
             car_reg_text: carData.car_reg,
             car_reg_province: carData.province,
@@ -227,27 +240,62 @@ export default function CustomerView({ user, sharedLocation }) {
                     waypoints={waypoints}
                     setWaypoints={setWaypoints}
                     locationNames={locationNames}
+                    autoSnapPaused={autoSnapPaused}
+                    onMapInteract={() => setAutoSnapPaused(true)}
                 />
 
                 {activeSelection?.type === 'home-picking' && activeSelection?.status !== 'confirmed' && (
                     <MapSelectionOverlay
                         message={activeSelection.coords ? "ตำแหน่งนี้ใช่หรือไม่?" : "จิ้มตำแหน่งบ้านที่ต้องการบนแผนที่"}
+                        coords={activeSelection.coords}
                         onConfirm={() => activeSelection.coords && setActiveSelection({ ...activeSelection, status: 'confirmed' })}
                         onCancel={() => setActiveSelection(null)}
                     />
                 )}
+                
+
 
                 <button
                     onClick={() => {
-                        if (myPosition && mapInstance) mapInstance.flyTo(myPosition, 15);
-                        else useCurrentLocation();
+                        if (autoSnapPaused) {
+                            setAutoSnapPaused(false);
+                        } else if (myPosition && mapInstance) {
+                            mapInstance.flyTo(myPosition, 15, { hard: true });
+                        } else {
+                            useCurrentLocation();
+                        }
                     }}
-                    className="fixed bottom-[85%] right-4 z-[9999] w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center text-blue-600 hover:bg-blue-50 transition-all active:scale-90 border border-gray-100"
+                    className={`fixed bottom-[10%] right-4 z-[900] w-12 h-12 rounded-2xl shadow-xl flex items-center justify-center transition-all active:scale-90 border ${
+                        !autoSnapPaused 
+                        ? 'bg-blue-600 text-white border-blue-400' 
+                        : 'bg-white text-blue-600 border-gray-100'
+                    }`}
+                    title={!autoSnapPaused ? "กำลังติดตามตำแหน่ง" : "ล็อกตำแหน่งปัจจุบัน"}
                 >
                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
                     </svg>
                 </button>
+
+                {techLocations?.length > 0 && (
+                    <button
+                        onClick={() => {
+                            const firstTech = techLocations[0];
+                            if (mapInstance && firstTech?.last_lat && firstTech?.last_lng) {
+                                mapInstance.flyTo([firstTech.last_lat, firstTech.last_lng], 16, {
+                                    animate: true,
+                                    duration: 1.5,
+                                    hard: true
+                                });
+                            }
+                        }}
+                        className="fixed bottom-[18%] right-4 z-[900] w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center border-2 border-blue-500 hover:bg-blue-50 transition-all active:scale-95 group"
+                        title="ดูตำแหน่งช่าง"
+                    >
+                        <img src={technicialcar} className="w-8 h-8 object-contain filter drop-shadow-sm group-hover:scale-110 transition-transform" />
+                       
+                    </button>
+                )}
 
                 {waypoints.length > 0 && (
                     <button

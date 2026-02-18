@@ -69,9 +69,7 @@ export default function SearchControl({ onResultSelect, currentPosition }) {
                         return;
                     }
                 }
-            } catch (e) {
-                console.error(e);
-            }
+            } catch (e) {}
         }
 
         if (q.match(/^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/)) {
@@ -103,7 +101,7 @@ export default function SearchControl({ onResultSelect, currentPosition }) {
                 }
             }
         } catch (error) {
-            console.warn("Photon search failing, trying fallback...", error);
+           
         }
 
         try {
@@ -138,7 +136,7 @@ export default function SearchControl({ onResultSelect, currentPosition }) {
                 }
             }
         } catch (error) {
-            console.error("Nominatim fallback search error:", error);
+           
         }
 
         setResults([]);

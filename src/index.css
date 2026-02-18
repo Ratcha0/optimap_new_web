@@ -18,7 +18,7 @@ body {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  background-color: #000;
+  background-color: #f2efe9;
 }
 
 #root {
@@ -35,22 +35,27 @@ body {
 }
 
 .thin-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.1);
   border-radius: 10px;
 }
 
 .thin-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .leaflet-container {
   width: 100%;
   height: 100%;
-  background: #f8f9fa !important;
+  background-color: #f2efe9 !important;
 }
 
 .leaflet-control-zoom {
   display: none !important;
+}
+
+/* Override default Leaflet z-index for popups to be above other UI elements */
+.leaflet-pane.leaflet-popup-pane {
+  z-index: 2000 !important;
 }
 
 .leaflet-popup-content-wrapper {
@@ -71,6 +76,35 @@ body {
   display: none !important;
 }
 
+
+.leaflet-container a.leaflet-popup-close-button {
+  width: 30px !important;  
+  height: 30px !important; 
+  font-size: 20px !important;
+  line-height: 30px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: white !important;
+  border-radius: 50% !important; 
+  color: #6b7280 !important; 
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  top: 12px !important; 
+  right: 12px !important;
+  opacity: 1 !important;
+  transition: all 0.2s ease !important;
+}
+
+.leaflet-container a.leaflet-popup-close-button:hover {
+  background: #f3f4f6 !important;
+  color: #ef4444 !important; 
+  transform: scale(1.1);
+}
+
+.leaflet-container a.leaflet-popup-close-button:active {
+  transform: scale(0.95);
+}
+
 .custom-tooltip {
   background: rgba(0, 0, 0, 0.8) !important;
   backdrop-filter: blur(8px);
@@ -84,17 +118,9 @@ body {
 }
 
 @keyframes float {
-  0% {
-    transform: translateY(0px);
-  }
-
-  50% {
-    transform: translateY(-10px);
-  }
-
-  100% {
-    transform: translateY(0px);
-  }
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
 }
 
 .animate-float {
@@ -104,5 +130,14 @@ body {
 @layer utilities {
   .text-shadow-premium {
     text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }

@@ -21,11 +21,11 @@ export default function MapUserInteraction({ activeSelection, onLocationSelect, 
             }
         },
         dragstart: () => onMapInteract?.('start'),
-        dragend: () => onMapInteract?.('end'),
-        zoomstart: () => onMapInteract?.('start'),
-        zoomend: () => onMapInteract?.('end'),
-        mousedown: () => onMapInteract?.('start'),
-        touchstart: () => onMapInteract?.('start'),
+        rotatestart: () => onMapInteract?.('start'),
+        zoomstart: (e) => {
+           
+            if (e.originalEvent) onMapInteract?.('start');
+        }
     });
     return null;
 }

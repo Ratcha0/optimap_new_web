@@ -22,7 +22,8 @@ function ArrowDecorator({ positions, color }) {
     return null;
 }
 
-export default function MapLayers({
+
+export default React.memo(function MapLayers({
     startPoint,
     locationNames,
     setActiveSelection,
@@ -88,7 +89,7 @@ export default function MapLayers({
             })}
 
             {routePath.length > 0 && (
-                <Polyline positions={routePath} color={APP_THEME.INACTIVE} weight={5} opacity={0.3} dashArray="12, 12" />
+                <Polyline positions={routePath} color={APP_THEME.INACTIVE} weight={5} opacity={0.3} dashArray="12, 12" smoothFactor={1.5} />
             )}
 
             {routeLegs.map((leg, i) => {
@@ -116,6 +117,7 @@ export default function MapLayers({
                             color={color}
                             weight={isCurrent ? 7 : 4}
                             opacity={isCurrent ? 1 : 0.5}
+                            smoothFactor={1.5}
                         >
                             {isCurrent && isNavigating && (
                                 <Tooltip sticky direction="top" permanent className="bg-blue-600 text-white border-none rounded-lg px-2 py-1 text-[10px] font-bold shadow-lg">
@@ -129,4 +131,4 @@ export default function MapLayers({
             })}
         </>
     );
-}
+});

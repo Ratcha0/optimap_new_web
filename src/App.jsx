@@ -1,10 +1,14 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, lazy, Suspense } from 'react'
 import { useAuth } from './contexts/AuthContext'
 import { supabase } from './utils/supabaseClient'
-import TechnicianView from './components/views/TechnicianView'
-import CustomerView from './components/views/CustomerView'
 import { ToastProvider } from './components/ui/ToastNotification'
 import LoadingScreen from './components/ui/LoadingScreen'
+import ErrorBoundary from './components/ui/ErrorBoundary'
+
+// Lazy load heavy views
+const TechnicianView = lazy(() => import('./components/views/TechnicianView'));
+const CustomerView = lazy(() => import('./components/views/CustomerView'));
+const AdminDashboard = lazy(() => import('./components/views/admin/AdminDashboard'));
 
 function App() {
   const { user, loading: authLoading } = useAuth();
@@ -59,14 +63,21 @@ function App() {
   }
 
   return (
+
     <ToastProvider>
-      {(!user) ? (
-        <TechnicianView user={null} userProfile={null} sharedLocation={sharedLocation} />
-      ) : (userProfile?.role === 'user') ? (
-        <CustomerView user={user} sharedLocation={sharedLocation} />
-      ) : (
-        <TechnicianView user={user} userProfile={userProfile} sharedLocation={sharedLocation} />
-      )}
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingScreen />}>
+          {(!user) ? (
+            <TechnicianView user={null} userProfile={null} sharedLocation={sharedLocation} />
+          ) : (userProfile?.role === 'admin') ? (
+            <AdminDashboard user={user} userProfile={userProfile} />
+          ) : (userProfile?.role === 'user') ? (
+            <CustomerView user={user} sharedLocation={sharedLocation} />
+          ) : (
+            <TechnicianView user={user} userProfile={userProfile} sharedLocation={sharedLocation} />
+          )}
+        </Suspense>
+      </ErrorBoundary>
     </ToastProvider>
   );
 }

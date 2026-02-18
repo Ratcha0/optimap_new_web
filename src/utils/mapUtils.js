@@ -28,23 +28,37 @@ export const createNumberedIcon = (number, color = APP_THEME.EMERGENCY) => {
 };
 
 const geocodeCache = new Map();
-
-const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+let sessionRequestCount = 0;
+let lastRequestTime = 0;
+let isServiceBlocked = false;
+const SESSION_LIMIT = 30;
 
 export const reverseGeocode = async (lat, lng) => {
     const cacheKey = `${lat.toFixed(5)},${lng.toFixed(5)}`;
     if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey);
 
+    const now = Date.now();
+    const isLikelyBlocked = window.location.hostname.includes('ngrok') || window.location.hostname.includes('localhost');
+
+    if (isServiceBlocked || isLikelyBlocked || now - lastRequestTime < 5000 || sessionRequestCount >= SESSION_LIMIT) {
+        return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
+
     try {
-        await sleep(1000);
+        lastRequestTime = now;
+        sessionRequestCount++;
+        
         const res = await fetch(`${SEARCH_API.NOMINATIM}/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=th`);
+        if (res.status === 403 || res.status === 429) {
+            isServiceBlocked = true;
+            return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+        }
         if (!res.ok) throw new Error('Geocoding failed');
         const data = await res.json();
         const address = data.address ? (data.address.road || data.address.suburb || data.display_name.split(',')[0]) : `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
         geocodeCache.set(cacheKey, address);
         return address;
     } catch (e) {
-        console.warn('Geocoding error:', e);
         return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     }
 };

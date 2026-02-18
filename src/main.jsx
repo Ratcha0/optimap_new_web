@@ -21,6 +21,16 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
+
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(registration => {})
+      .catch(registrationError => {});
+  });
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AuthProvider>

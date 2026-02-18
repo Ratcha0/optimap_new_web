@@ -101,7 +101,7 @@ export default function CustomerControlPanel({
             setUnreadTicketIds(unreadIds);
             setTickets(data || []);
         } catch (err) {
-            console.error('Fetch tickets error:', err.message);
+            
         }
     };
 
@@ -151,7 +151,7 @@ export default function CustomerControlPanel({
     };
 
 
-    const PEEK_VAR = 'var(--peek-height, 65px)';
+    const PEEK_VAR = 'var(--peek-height, 45px)';
 
     const getTransform = () => {
         if (isDragging) {
@@ -173,16 +173,16 @@ export default function CustomerControlPanel({
             <style dangerouslySetInnerHTML={{
                 __html: `
                 @media (min-width: 640px) {
-                    :root { --peek-height: 110px; }
+                    :root { --peek-height: 90px; }
                 }
                 @media (max-width: 639px) {
-                    :root { --peek-height: 65px; }
+                    :root { --peek-height: 45px; }
                 }
             `}} />
-            <div className="bg-white w-full rounded-t-[2.5rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)] p-4 sm:p-6 pb-6 sm:pb-8 flex flex-col gap-4 sm:gap-6 animate-in slide-in-from-bottom duration-500 border-t border-white/50 relative">
+            <div className="bg-white w-full rounded-t-[1.8rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)] p-2 sm:p-4 pb-4 sm:pb-5 flex flex-col gap-1.5 sm:gap-3 animate-in slide-in-from-bottom duration-500 border-t border-white/50 relative">
 
                 <div
-                    className="absolute top-0 left-0 right-0 h-10 flex items-start justify-center cursor-grab active:cursor-grabbing z-50 touch-none"
+                    className="absolute top-0 left-0 right-0 h-7 flex items-start justify-center cursor-grab active:cursor-grabbing z-50 touch-none"
                     onPointerDown={handlePointerDown}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
@@ -193,29 +193,26 @@ export default function CustomerControlPanel({
                         }
                     }}
                 >
-                    <div className="w-16 h-1.5 bg-gray-200 rounded-full mt-4 hover:bg-gray-300 transition-colors shadow-inner"></div>
+                    <div className="w-10 h-1 bg-gray-200 rounded-full mt-2.5 hover:bg-gray-300 transition-colors shadow-inner"></div>
                 </div>
 
-
-                <div className="mt-2"></div>
-
-
+                <div className="mt-1"></div>
 
                 {tickets.length > 0 && (
                     <>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
+                        <div className="flex items-center justify-between px-1">
+                            <div className="flex items-center gap-2">
                                 <div>
-                                    <h2 className="text-gray-900 font-black text-base sm:text-lg tracking-tight leading-none uppercase">รายละเอียดการแจ้งซ่อม</h2>
-                                    <p className="text-[10px] sm:text-[12px] font-bold text-gray-400 uppercase tracking-widest mt-1">สถานะการแจ้งซ่อม</p>
+                                    <h2 className="text-gray-900 font-black text-[11px] sm:text-[13px] tracking-tight leading-none uppercase">รายละเอียดการแจ้งซ่อม</h2>
+                                    <p className="text-[7.5px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">สถานะการแจ้งซ่อม</p>
                                 </div>
                             </div>
                         </div>
 
                         {activeTicket && (
-                            <div className="flex flex-col gap-8">
+                            <div className="flex flex-col gap-2.5 sm:gap-4">
 
-                                <div className="flex items-center justify-between px-2">
+                                <div className="flex items-center justify-between px-0.5">
                                     {(() => {
                                         const status = activeTicket.status;
                                         const steps = [
@@ -237,16 +234,16 @@ export default function CustomerControlPanel({
 
                                         return steps.map((step, index) => (
                                             <React.Fragment key={step.key}>
-                                                <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
-                                                    <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all duration-500 ${index <= currentIndex ? 'bg-blue-500 text-white shadow-lg shadow-blue-200' : 'bg-gray-50 text-gray-300'}`}>
-                                                        <div className="w-5 h-5 sm:w-6 sm:h-6">
+                                                <div className="flex flex-col items-center gap-0.5 flex-1 min-w-0">
+                                                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center transition-all duration-500 ${index <= currentIndex ? 'bg-blue-500 text-white shadow-md' : 'bg-gray-50 text-gray-300'}`}>
+                                                        <div className="w-3.5 h-3.5 sm:w-4 sm:h-4">
                                                             {step.icon}
                                                         </div>
                                                     </div>
-                                                    <span className={`text-[9px] sm:text-[10px] font-black tracking-tight text-center truncate w-full ${index <= currentIndex ? 'text-blue-500' : 'text-gray-300'}`}>{step.label}</span>
+                                                    <span className={`text-[7px] sm:text-[8px] font-black tracking-tight text-center truncate w-full ${index <= currentIndex ? 'text-blue-500' : 'text-gray-300'}`}>{step.label}</span>
                                                 </div>
                                                 {index < steps.length - 1 && (
-                                                    <div className="w-4 sm:w-12 h-[1px] sm:h-[2px] bg-gray-100 mt-4 sm:mt-5 relative overflow-hidden shrink-0">
+                                                    <div className="w-2 sm:w-8 h-[1px] bg-gray-100 mt-3 relative overflow-hidden shrink-0">
                                                         <div className={`absolute inset-0 bg-blue-500 transition-all duration-1000 ease-in-out ${index < currentIndex ? 'translate-x-0' : '-translate-x-full'}`}></div>
                                                     </div>
                                                 )}
@@ -256,65 +253,64 @@ export default function CustomerControlPanel({
                                 </div>
 
 
-                                <div className="space-y-4">
-                                    <div className="bg-white border border-blue-100/50 rounded-[2.5rem] p-6 shadow-2xl shadow-blue-500/5 transition-all">
-                                        <div className="flex items-center justify-between mb-5">
-                                            <div className="flex-1 mr-4">
+                                <div className="space-y-1.5">
+                                    <div className="bg-white border border-blue-50/50 rounded-[1.2rem] p-2 sm:p-3 shadow-lg shadow-blue-500/5 transition-all">
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <div className="flex-1 mr-2">
                                                 {tickets.length > 1 ? (
                                                     <div className="relative group">
-                                                        <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                                            <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30">
-                                                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                                                        <div className="absolute inset-y-0 left-2 flex items-center pointer-events-none">
+                                                            <div className="w-3.5 h-3.5 bg-blue-500 rounded-full flex items-center justify-center shadow-md">
+                                                                <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
                                                             </div>
                                                         </div>
                                                         <select
                                                             value={selectedTicketIndex}
                                                             onChange={(e) => setSelectedTicketIndex(parseInt(e.target.value))}
-                                                            className="w-full pl-9 pr-8 py-2 sm:pl-11 sm:pr-10 sm:py-2.5 bg-blue-50 border border-blue-100/50 rounded-lg sm:rounded-xl text-[11px] sm:text-sm font-black text-blue-900 tracking-tight appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                                                            className="w-full pl-7 pr-6 py-1 bg-blue-50 border border-blue-100/50 rounded-lg sm:rounded-xl text-[9px] sm:text-[11px] font-black text-blue-900 tracking-tight appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
                                                         >
                                                             {tickets.map((t, idx) => (
                                                                 <option key={t.id} value={idx}>งาน {idx + 1}: {t.issue_type}</option>
                                                             ))}
                                                         </select>
-                                                        <div className="absolute inset-y-0 right-2 sm:right-3 flex items-center pointer-events-none text-blue-500">
-                                                            <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
+                                                        <div className="absolute inset-y-0 right-1.5 flex items-center pointer-events-none text-blue-500">
+                                                            <svg className="w-2 h-2 sm:w-2.5 sm:h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <div className="bg-blue-50 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg sm:rounded-xl flex items-center gap-2 sm:gap-3 border border-blue-100/50">
-                                                        <div className="w-4 h-4 sm:w-5 sm:h-5 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30">
-                                                            <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                                                    <div className="bg-blue-50 px-2 py-1 rounded-lg flex items-center gap-1.5 border border-blue-100/50">
+                                                        <div className="w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center shadow-sm">
+                                                            <svg className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
                                                         </div>
-                                                        <span className="text-[11px] sm:text-sm font-black text-blue-900 tracking-tight">งาน 1: {activeTicket.issue_type}</span>
+                                                        <span className="text-[9px] sm:text-[11px] font-black text-blue-900 tracking-tight">งาน 1: {activeTicket.issue_type}</span>
                                                     </div>
                                                 )}
                                             </div>
                                         </div>
 
-                                        <div className="bg-gray-50/50 rounded-3xl p-4 flex items-center gap-4 sm:gap-5 border border-gray-100/50">
-                                            <div className="w-10 h-10 sm:w-14 sm:h-14 bg-white rounded-xl sm:rounded-2xl flex items-center justify-center text-blue-600 shadow-sm border border-gray-100 p-2 sm:p-3 shrink-0">
+                                        <div className="bg-gray-50/50 rounded-xl p-1.5 sm:p-2 flex items-center gap-2.5 border border-gray-100/50">
+                                            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-white rounded-lg flex items-center justify-center text-blue-600 shadow-sm border border-gray-100 p-1.5 shrink-0">
                                                 {statusIcons[activeTicket.status] || statusIcons.pending}
                                             </div>
                                             <div className="min-w-0">
-                                                <p className="font-black text-gray-900 text-sm sm:text-base tracking-tight truncate">ตำแหน่งจาก : {activeTicket.issue_type || 'Profile'}</p>
-                                                <p className="text-[10px] sm:text-xs text-gray-400 font-bold mt-0.5 truncate">หมายเลขทะเบียนรถ : {activeTicket.car_reg_number || ''} {activeTicket.car_reg_text} {activeTicket.car_reg_province}</p>
+                                                <p className="font-black text-gray-900 text-[10px] sm:text-[12px] tracking-tight truncate leading-tight">ตำแหน่งจาก : {activeTicket.issue_type || 'Profile'}</p>
+                                                <p className="text-[8px] sm:text-[9px] text-gray-400 font-bold mt-0.5 truncate leading-none">ทะเบียน : {activeTicket.car_reg_number || ''} {activeTicket.car_reg_text} {activeTicket.car_reg_province}</p>
                                             </div>
                                         </div>
 
                                         {activeTicket.status !== 'pending' && activeTicket.profiles && (
-                                            <div className="mt-6 pt-6 border-t border-gray-100 flex items-center justify-between">
-                                                <div className="flex items-center gap-3 sm:gap-4">
+                                            <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
                                                     <div className="relative group">
-                                                        <div className="absolute -inset-1 bg-gradient-to-tr from-blue-500 to-indigo-500 rounded-full opacity-20 blur-sm group-hover:opacity-40 transition-opacity"></div>
-                                                        <img src={activeTicket.profiles.avatar_url || 'https://via.placeholder.com/150'} className="w-11 h-11 sm:w-14 sm:h-14 rounded-full object-cover border-2 border-white shadow-xl relative" alt="" />
-                                                        <div className="absolute bottom-0 right-0 w-3.5 h-3.5 sm:w-4 sm:h-4 bg-green-500 border-2 border-white rounded-full shadow-lg"></div>
+                                                        <img src={activeTicket.profiles.avatar_url || 'https://via.placeholder.com/150'} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border border-white shadow-sm relative" alt="" />
+                                                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full"></div>
                                                     </div>
                                                     <div>
-                                                        <p className="text-[9px] sm:text-[10px] text-gray-400 font-black uppercase tracking-[0.1em] mb-0.5 sm:mb-1">ช่างเทคนิค</p>
-                                                        <p className="text-sm sm:text-base font-black text-gray-900 leading-none">{activeTicket.status === 'in_progress' ? 'กำลังเดินทาง...' : activeTicket.profiles.full_name}</p>
+                                                        <p className="text-[7px] sm:text-[8px] text-gray-400 font-black uppercase tracking-wider leading-none mb-0.5">ช่างเทคนิค</p>
+                                                        <p className="text-[10px] sm:text-[12px] font-black text-gray-900 leading-none">{activeTicket.status === 'in_progress' ? 'กำลังเดินทาง...' : activeTicket.profiles.full_name}</p>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2 sm:gap-3">
+                                                <div className="flex items-center gap-1.5">
                                                     <button
                                                         onClick={() => {
                                                             const profile = Array.isArray(activeTicket.profiles) ? activeTicket.profiles[0] : activeTicket.profiles;
@@ -325,19 +321,19 @@ export default function CustomerControlPanel({
                                                                 showToast('ช่างท่านนี้ยังไม่ได้ระบุเบอร์โทรศัพท์ในระบบ', 'info');
                                                             }
                                                         }}
-                                                        className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-green-50 text-green-600 rounded-xl sm:rounded-2xl hover:bg-green-600 hover:text-white active:scale-95 transition-all shadow-sm border border-green-100/50"
+                                                        className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center bg-green-50 text-green-600 rounded-lg hover:bg-green-600 hover:text-white active:scale-95 transition-all border border-green-100/30"
                                                     >
-                                                        <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                                        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
                                                     </button>
                                                     <button
                                                         onClick={() => onOpenChat(activeTicket)}
-                                                        className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-blue-50 text-blue-600 rounded-xl sm:rounded-2xl hover:bg-blue-600 hover:text-white active:scale-95 transition-all shadow-sm relative border border-blue-100/50"
+                                                        className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white active:scale-95 transition-all relative border border-blue-100/30"
                                                     >
-                                                        <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                                                        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
                                                         {unreadTicketIds.has(activeTicket.id) && (
-                                                            <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 sm:h-4 sm:w-4">
+                                                            <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
                                                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                                                <span className="relative inline-flex rounded-full h-3.5 w-3.5 sm:h-4 sm:w-4 bg-red-500 border-2 border-white shadow-sm"></span>
+                                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-white"></span>
                                                             </span>
                                                         )}
                                                     </button>
@@ -351,13 +347,13 @@ export default function CustomerControlPanel({
                     </>
                 )}
 
-                <div className="px-1">
+                <div className="px-0.5">
                     <button
                         onClick={onReportIssue}
-                        className="w-full bg-gradient-to-br from-orange-400 to-orange-400 hover:from-orange-700 hover:to-orange-500 text-white font-black py-4 sm:py-5 rounded-[1.5rem] shadow-[0_20px_40px_rgba(249,115,22,0.2)] active:scale-95 transition-all text-[11px] sm:text-[13px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 sm:gap-3 group"
+                        className="w-full bg-gradient-to-br from-orange-400 to-orange-400 hover:from-orange-500 hover:to-orange-600 text-white font-black py-2.5 sm:py-3.5 rounded-lg shadow-md active:scale-95 transition-all text-[9px] sm:text-[10px] uppercase tracking-[0.1em] flex items-center justify-center gap-1.5 group"
                     >
-                        <div className="bg-white/20 p-1.5 sm:p-2 rounded-xl group-hover:rotate-12 transition-transform shadow-inner">
-                            <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="bg-white/20 p-1 rounded-md group-hover:rotate-12 transition-transform shadow-inner">
+                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
                         </div>

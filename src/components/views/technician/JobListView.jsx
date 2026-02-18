@@ -3,6 +3,7 @@ import { supabase } from '../../../utils/supabaseClient';
 import { reverseGeocode } from '../../../utils/mapUtils';
 import { useToast } from '../../ui/ToastNotification';
 import MessageModal from '../../modals/MessageModal';
+import TeamInviteModal from '../../modals/TeamInviteModal';
 import JobCard from './JobCard';
 import { TICKET_STATUS } from '../../../constants/visuals';
 
@@ -13,6 +14,8 @@ export default function JobListView({ user, onAcceptJob, setViewMode }) {
     const [isMessageOpen, setIsMessageOpen] = useState(false);
     const [activeTicket, setActiveTicket] = useState(null);
     const [unreadJobs, setUnreadJobs] = useState(new Set());
+    const [isInviteOpen, setIsInviteOpen] = useState(false);
+    const [activeInviteTicket, setActiveInviteTicket] = useState(null);
     const { showToast } = useToast();
 
     useEffect(() => {
@@ -33,9 +36,17 @@ export default function JobListView({ user, onAcceptJob, setViewMode }) {
             })
             .subscribe();
 
+        const assignSubscription = supabase
+            .channel('job_assignments_sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_assignments' }, () => {
+                fetchJobs();
+            })
+            .subscribe();
+
         return () => {
             supabase.removeChannel(subscription);
             supabase.removeChannel(msgSubscription);
+            supabase.removeChannel(assignSubscription);
         };
     }, [user?.id]);
 
@@ -49,7 +60,11 @@ export default function JobListView({ user, onAcceptJob, setViewMode }) {
                 .select(`
                     *, 
                     profiles:user_id(full_name, avatar_url, email),
-                    ticket_messages(sender_id, created_at)
+                    ticket_messages(sender_id, created_at),
+                    ticket_assignments(
+                        id, technician_id, status,
+                        profiles:technician_id(full_name, avatar_url)
+                    )
                 `)
                 .order('created_at', { ascending: false });
 
@@ -98,15 +113,42 @@ export default function JobListView({ user, onAcceptJob, setViewMode }) {
 
     const handleUpdateStatus = async (jobId, newStatus) => {
         try {
-            const { error } = await supabase
+            const currentJob = jobs.find(j => j.id === jobId);
+            const updatePayload = { status: newStatus };
+            
+            if (newStatus === 'pending') {
+                updatePayload.technician_id = null;
+            } else if (!currentJob?.technician_id && (newStatus === 'accepted' || newStatus === 'in_progress')) {
+                updatePayload.technician_id = user?.id;
+            }
+
+            const { error: updateError } = await supabase
                 .from('support_tickets')
-                .update({
-                    status: newStatus,
-                    technician_id: (newStatus === 'accepted' || newStatus === 'in_progress') ? user?.id : undefined
-                })
+                .update(updatePayload)
                 .eq('id', jobId);
 
-            if (error) throw error;
+            if (updateError) throw updateError;
+
+            if (newStatus === 'accepted' || newStatus === 'in_progress') {
+                const { data: existing } = await supabase
+                    .from('ticket_assignments')
+                    .select('id')
+                    .eq('ticket_id', jobId)
+                    .eq('technician_id', user?.id)
+                    .maybeSingle();
+
+                if (!existing) {
+                    await supabase
+                        .from('ticket_assignments')
+                        .insert({
+                            ticket_id: jobId,
+                            technician_id: user?.id,
+                            role: 'primary',
+                            status: 'accepted'
+                        });
+                }
+            }
+
             fetchJobs();
             showToast('อัปเดตสถานะงานเรียบร้อยแล้ว', 'success');
         } catch (err) {
@@ -124,9 +166,13 @@ export default function JobListView({ user, onAcceptJob, setViewMode }) {
         return config.label;
     };
 
+    const handleOpenInvite = (ticket) => {
+        setActiveInviteTicket(ticket);
+        setIsInviteOpen(true);
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-900">
-
             <header className="p-3 sm:p-6 border-b border-gray-200 sticky top-0 bg-white/90 backdrop-blur-lg z-10 flex flex-col gap-2 sm:gap-4 shadow-sm">
                 <div className="flex items-center gap-4">
                     <button
@@ -139,7 +185,6 @@ export default function JobListView({ user, onAcceptJob, setViewMode }) {
                     </button>
                     <div>
                         <h1 className="text-xl font-bold text-gray-900">รายการแจ้งซ่อม</h1>
-
                     </div>
                 </div>
 
@@ -148,7 +193,6 @@ export default function JobListView({ user, onAcceptJob, setViewMode }) {
                     {error && <span className="text-red-500 font-bold">⚠️ {error}</span>}
                 </div>
             </header>
-
 
             <main className="flex-grow p-4 space-y-4">
                 {loading && jobs.length === 0 ? (
@@ -178,12 +222,13 @@ export default function JobListView({ user, onAcceptJob, setViewMode }) {
                             setUnreadJobs={setUnreadJobs}
                             getStatusColor={getStatusColor}
                             getStatusText={getStatusText}
+                            onOpenInvite={handleOpenInvite}
                         />
                     ))
                 )}
             </main>
 
-
+            {/* Modals at Root Level */}
             {activeTicket && (
                 <MessageModal
                     isOpen={isMessageOpen}
@@ -192,6 +237,15 @@ export default function JobListView({ user, onAcceptJob, setViewMode }) {
                     currentUser={user}
                     otherPartyName={activeTicket.profiles?.full_name}
                     otherPartyAvatar={activeTicket.profiles?.avatar_url}
+                />
+            )}
+
+            {activeInviteTicket && (
+                <TeamInviteModal
+                    isOpen={isInviteOpen}
+                    onClose={() => setIsInviteOpen(false)}
+                    ticketId={activeInviteTicket.id}
+                    currentUser={user}
                 />
             )}
         </div>

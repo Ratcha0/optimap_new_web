@@ -1,12 +1,40 @@
 import React from 'react';
 
-export default function CustomerHeader({ title, subtitle, onShowTickets, hasNotifications, userProfile, onProfileClick }) {
+export default function CustomerHeader({ title, subtitle, onShowTickets, hasNotifications, userProfile, onProfileClick, gpsAccuracy }) {
+    const getSignalInfo = (acc) => {
+        if (acc === null || acc === undefined || isNaN(acc)) return { bars: 0, color: 'bg-gray-300' };
+        if (acc <= 10) return { bars: 4, color: 'bg-green-500' };
+        if (acc <= 25) return { bars: 3, color: 'bg-green-400' };
+        if (acc <= 60) return { bars: 2, color: 'bg-orange-400' };
+        return { bars: 1, color: 'bg-red-500' };
+    };
+
+    const signal = getSignalInfo(gpsAccuracy);
+
     return (
         <div className="fixed top-0 left-0 w-full z-[1001] animate-in slide-in-from-top duration-500">
             <header className="flex items-center justify-between px-3 sm:px-6 py-1 sm:py-2.5 bg-white text-gray-900 shadow-sm border-b border-gray-100 relative overflow-hidden backdrop-blur-md">
 
-                <div className="flex items-center gap-2 sm:gap-4 z-10">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>
+                <div className="flex items-center gap-2.5 sm:gap-6 z-10">
+                    <div className="flex items-center gap-2">
+                        {/* GPS Signal Bars with Accuracy Label */}
+                        <div className="flex flex-col items-center">
+                            <div className="flex items-end gap-[2px] h-3 w-4.5 mb-0.5">
+                                {[1, 2, 3, 4].map((b) => (
+                                    <div 
+                                        key={b}
+                                        style={{ height: `${b * 25}%` }}
+                                        className={`w-0.5 rounded-full transition-all duration-500 ${b <= signal.bars ? signal.color : 'bg-gray-200'}`}
+                                    />
+                                ))}
+                            </div>
+                            {gpsAccuracy && (
+                                <span className={`text-[6px] font-black leading-none ${signal.bars <= 1 ? 'text-red-500' : 'text-gray-400'}`}>
+                                    {Math.round(gpsAccuracy)}m
+                                </span>
+                            )}
+                        </div>
+                    </div>
                     <div className="flex flex-col">
                         <h1 className="text-[11px] sm:text-base font-bold text-gray-900 tracking-wide leading-tight truncate max-w-[120px] sm:max-w-none">{title || 'Smart Tracking'}</h1>
                         <p className="text-[6px] sm:text-[9px] font-bold text-blue-500 uppercase tracking-[0.15em] mt-0.5">{subtitle || 'Live Connection'}</p>

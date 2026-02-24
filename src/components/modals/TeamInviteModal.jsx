@@ -70,7 +70,7 @@ export default function TeamInviteModal({ isOpen, onClose, ticketId, currentUser
             .gte('last_updated', thirtyMinutesAgo);
 
         if (error) {
-            // Error
+           
         } else {
             setTechs(data || []);
         }

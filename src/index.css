@@ -43,41 +43,25 @@ body {
   background: rgba(0, 0, 0, 0.2);
 }
 
-.leaflet-container {
+.maplibregl-map {
   width: 100%;
   height: 100%;
   background-color: #f2efe9 !important;
 }
 
-.leaflet-control-zoom {
-  display: none !important;
-}
-
-/* Override default Leaflet z-index for popups to be above other UI elements */
-.leaflet-pane.leaflet-popup-pane {
-  z-index: 2000 !important;
-}
-
-.leaflet-popup-content-wrapper {
+.maplibregl-popup-content {
   border-radius: 2rem !important;
   padding: 0px !important;
-  background: rgba(255, 255, 255, 0.95) !important;
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.98) !important;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3) !important;
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.leaflet-popup-content {
-  margin: 12px 16px !important;
-  width: auto !important;
-}
-
-.leaflet-popup-tip-container {
+.maplibregl-popup-tip {
   display: none !important;
 }
 
-
-.leaflet-container a.leaflet-popup-close-button {
+.maplibregl-popup-close-button {
   width: 30px !important;  
   height: 30px !important; 
   font-size: 20px !important;
@@ -93,28 +77,13 @@ body {
   right: 12px !important;
   opacity: 1 !important;
   transition: all 0.2s ease !important;
+  border: none !important;
 }
 
-.leaflet-container a.leaflet-popup-close-button:hover {
+.maplibregl-popup-close-button:hover {
   background: #f3f4f6 !important;
   color: #ef4444 !important; 
   transform: scale(1.1);
-}
-
-.leaflet-container a.leaflet-popup-close-button:active {
-  transform: scale(0.95);
-}
-
-.custom-tooltip {
-  background: rgba(0, 0, 0, 0.8) !important;
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  border-radius: 12px !important;
-  color: white !important;
-  font-size: 11px !important;
-  font-weight: 800 !important;
-  padding: 4px 8px !important;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
 }
 
 @keyframes float {

@@ -1,5 +1,3 @@
-import L from 'leaflet';
-import { APP_THEME } from '../constants/visuals';
 import { SEARCH_API } from '../constants/api';
 
 export const formatTime = (seconds) => {
@@ -7,24 +5,6 @@ export const formatTime = (seconds) => {
     const m = Math.floor((seconds % 3600) / 60);
     if (h > 0) return `${h} ชม. ${m} นาที`;
     return `${m} นาที`;
-};
-
-export const createNumberedIcon = (number, color = APP_THEME.EMERGENCY) => {
-    const iconSize = 40;
-    return L.divIcon({
-        className: 'dest-marker-premium',
-        html: `
-            <div class="relative flex items-center justify-center" style="width: ${iconSize}px; height: ${iconSize}px;">
-                <div class="w-8 h-8 rounded-full shadow-lg border-2 border-white flex items-center justify-center text-white text-[10px] font-black z-10" style="background: ${color};">
-                    ${number}
-                </div>
-                <div class="absolute bottom-1 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 z-0" style="background: ${color};"></div>
-            </div>
-        `,
-        iconSize: [iconSize, iconSize],
-        iconAnchor: [iconSize / 2, iconSize],
-        popupAnchor: [0, -iconSize],
-    });
 };
 
 const geocodeCache = new Map();
@@ -81,6 +61,23 @@ export const translateInstruction = (step) => {
     const type = step.maneuver.type;
     const modifier = step.maneuver.modifier;
     const road = step.name || "";
+    const intersections = step.intersections || [];
+    
+    let laneAdvice = "";
+    if (intersections.length > 0 && intersections[0].lanes) {
+        const lanes = intersections[0].lanes;
+        const validLanes = lanes.map((l, i) => l.valid ? i + 1 : null).filter(l => l !== null);
+        
+        if (validLanes.length > 0 && validLanes.length < lanes.length) {
+            if (validLanes.includes(1) && !validLanes.includes(lanes.length)) {
+                laneAdvice = "ชิดซ้าย ";
+            } else if (validLanes.includes(lanes.length) && !validLanes.includes(1)) {
+                laneAdvice = "ชิดขวา ";
+            } else {
+                laneAdvice = "ใช้เลนกลาง ";
+            }
+        }
+    }
 
     const translations = {
         'turn': {
@@ -116,8 +113,15 @@ export const translateInstruction = (step) => {
         action = action[modifier] || "เลี้ยว";
     }
 
-    if (road && road !== "") {
-        return `${action} เข้าสู่ ${road}`;
+    if (type === 'roundabout' || type === 'rotary') {
+        const exit = step.maneuver.exit || 1;
+        action = `${action} และใช้ทางออกที่ ${exit}`;
     }
-    return action;
+
+    let finalInstruction = `${laneAdvice}${action}`;
+    if (road && road !== "") {
+        finalInstruction += ` เข้าสู่ ${road}`;
+    }
+    
+    return finalInstruction;
 };

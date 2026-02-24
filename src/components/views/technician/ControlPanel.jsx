@@ -42,7 +42,9 @@ export default function ControlPanel({
     carStatus,
     eta,
     remainingDistance,
-    isRouting
+    isRouting,
+    setCompletedWaypoints,
+    setCurrentLegIndex
 }) {
     const { user, signOut } = useAuth();
     const [authMode, setAuthMode] = useState('login');
@@ -79,6 +81,8 @@ export default function ControlPanel({
 
     const handleClearAll = () => {
         setWaypoints([null]);
+        if (setCompletedWaypoints) setCompletedWaypoints(new Set());
+        if (setCurrentLegIndex) setCurrentLegIndex(0);
         showToast('ล้างรายการทั้งหมดสำเร็จ', 'success');
     };
 
@@ -314,40 +318,27 @@ export default function ControlPanel({
                     })}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-3">
-                    <div className="flex bg-gray-50 p-0.5 rounded-lg border border-gray-100/80">
-                        <button
-                            onClick={() => setTripType('oneway')}
-                            className={`flex-1 py-1 rounded-md text-[9px] sm:text-[11px] font-black transition-all ${tripType === 'oneway' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}
-                        >
-                            ทางเดียว
-                        </button>
-                        <button
-                            onClick={() => setTripType('roundtrip')}
-                            className={`flex-1 py-1 rounded-md text-[9px] sm:text-[11px] font-black transition-all ${tripType === 'roundtrip' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}
-                        >
-                            ไป-กลับ
-                        </button>
-                    </div>
-
-                    <div className="flex gap-1.5">
-                        <button
-                            onClick={startNavigation}
-                            disabled={!distance || isRouting}
-                            className={`flex-1 py-1.5 sm:py-2 rounded-lg font-black text-[9px] sm:text-xs uppercase flex items-center justify-center gap-1.5 transition-all ${distance && !isRouting ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10' : 'bg-gray-100 text-gray-300'}`}
-                        >
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" /></svg>
-                            {isRouting ? 'รอ...' : 'นำทาง'}
-                        </button>
-                        <button
-                            onClick={simulateNavigation}
-                            disabled={!distance || isRouting}
-                            className={`flex-1 py-1.5 sm:py-2 rounded-lg font-black text-[9px] sm:text-xs uppercase flex items-center justify-center gap-1.5 border-2 transition-all ${distance && !isRouting ? 'border-blue-500 text-blue-500' : 'border-gray-200 text-gray-300'}`}
-                        >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
-                            จำลอง
-                        </button>
-                    </div>
+                <div className="flex gap-1.5 sm:gap-3">
+                    <button
+                        onClick={startNavigation}
+                        disabled={!distance || isRouting}
+                        className={`flex-[2] py-2 sm:py-3 rounded-xl font-black text-xs sm:text-sm uppercase flex items-center justify-center gap-2 transition-all ${distance && !isRouting ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25' : 'bg-gray-100 text-gray-300'}`}
+                    >
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" />
+                        </svg>
+                        {isRouting ? 'รอคำนวณ...' : 'เริ่มนำทาง'}
+                    </button>
+                    <button
+                        onClick={simulateNavigation}
+                        disabled={!distance || isRouting}
+                        className={`flex-1 py-2 sm:py-3 rounded-xl font-black text-[9px] sm:text-xs uppercase flex items-center justify-center gap-1.5 border-2 transition-all ${distance && !isRouting ? 'border-blue-500 text-blue-500 hover:bg-blue-50' : 'border-gray-200 text-gray-300'}`}
+                    >
+                        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        </svg>
+                        จำลอง
+                    </button>
                 </div>
             </div>
         </div>

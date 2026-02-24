@@ -1,62 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { calculateDistance } from '../../utils/geoUtils';
-import { SEARCH_API } from '../../constants/api';
+import { performPlaceSearch } from '../../utils/searchUtils';
 
 export default function SearchControl({ onResultSelect, currentPosition }) {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
 
-    const formatPhotonResult = (f) => {
-        if (!f || !f.properties || !f.geometry) return null;
-        const p = f.properties;
-        const mainName = p.name || p.street || p.housenumber || "";
-        const subDetails = [p.city, p.district, p.state].filter(Boolean).join(', ');
-        const fullName = mainName + (subDetails ? ` (${subDetails})` : "");
-        const lat = f.geometry.coordinates[1];
-        const lon = f.geometry.coordinates[0];
-
-        let distNum = Infinity;
-        if (currentPosition) {
-            distNum = calculateDistance(currentPosition[0], currentPosition[1], lat, lon);
-        }
-
-        return {
-            lat,
-            lon,
-            display_name: fullName || "ไม่ทราบชื่อสถานที่",
-            distance: distNum
-        };
-    };
-
-    const formatNominatimResult = (item) => {
-        if (!item || !item.lat || !item.lon) return null;
-        const lat = parseFloat(item.lat);
-        const lon = parseFloat(item.lon);
-
-        let distNum = Infinity;
-        if (currentPosition) {
-            distNum = calculateDistance(currentPosition[0], currentPosition[1], lat, lon);
-        }
-
-        const addr = item.address || {};
-        const main = addr.amenity || addr.building || addr.road || addr.suburb || addr.city || addr.state || item.display_name.split(',')[0];
-        const subList = [addr.suburb, addr.city, addr.state].filter(s => s && s !== main).slice(0, 2);
-        const display = main + (subList.length > 0 ? ` (${subList.join(', ')})` : "");
-
-        return {
-            lat,
-            lon,
-            display_name: display || "ไม่ทราบชื่อสถานที่",
-            distance: distNum
-        };
-    };
-
     const handleSearch = async (manualQuery = null) => {
         const q = manualQuery || query;
         if (!q || q.length < 2) return;
         setIsSearching(true);
 
+ 
         if (q.includes('destination=')) {
             try {
                 const parts = q.split('destination=')[1].split('&')[0].split(',');
@@ -72,6 +27,7 @@ export default function SearchControl({ onResultSelect, currentPosition }) {
             } catch (e) {}
         }
 
+      
         if (q.match(/^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/)) {
             const parts = q.split(',');
             const lat = parseFloat(parts[0]);
@@ -81,66 +37,16 @@ export default function SearchControl({ onResultSelect, currentPosition }) {
             return;
         }
 
+       
         try {
-            let url = `${SEARCH_API.PHOTON}?q=${encodeURIComponent(q)}&lang=th&limit=10`;
-            if (currentPosition) {
-                url += `&lat=${currentPosition[0]}&lon=${currentPosition[1]}`;
-            }
-
-            const response = await fetch(url);
-            if (response.ok) {
-                const data = await response.json();
-                if (data && data.features && data.features.length > 0) {
-                    let formattedResults = data.features.map(formatPhotonResult).filter(Boolean);
-                    if (currentPosition) {
-                        formattedResults.sort((a, b) => a.distance - b.distance);
-                    }
-                    setResults(formattedResults);
-                    setIsSearching(false);
-                    return;
-                }
-            }
+            const searchResults = await performPlaceSearch(q, currentPosition);
+            setResults(searchResults);
         } catch (error) {
-           
+            console.error("Search failed:", error);
+            setResults([]);
+        } finally {
+            setIsSearching(false);
         }
-
-        try {
-            let nominatimUrl = `${SEARCH_API.NOMINATIM}/search?format=json&q=${encodeURIComponent(q)}&addressdetails=1&limit=15&countrycodes=th&accept-language=th`;
-
-            if (currentPosition) {
-
-                const lat = currentPosition[0];
-                const lon = currentPosition[1];
-                const offset = 0.5;
-                const viewbox = `${lon - offset},${lat + offset},${lon + offset},${lat - offset}`;
-                nominatimUrl += `&viewbox=${viewbox}&lat=${lat}&lon=${lon}`;
-            }
-
-            const response = await fetch(nominatimUrl, {
-                headers: {
-                    'Accept-Language': 'th,en;q=0.9',
-                    'User-Agent': 'OptiMap-App'
-                }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data && data.length > 0) {
-                    let formattedResults = data.map(formatNominatimResult).filter(Boolean);
-                    if (currentPosition) {
-                        formattedResults.sort((a, b) => a.distance - b.distance);
-                    }
-                    setResults(formattedResults);
-                    setIsSearching(false);
-                    return;
-                }
-            }
-        } catch (error) {
-           
-        }
-
-        setResults([]);
-        setIsSearching(false);
     };
 
     useEffect(() => {

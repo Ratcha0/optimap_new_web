@@ -8,33 +8,41 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const session = supabase.auth.getSession().then(({ data: { session }, error }) => {
-            if (error || !session) {
-                if (window.location.hash && window.location.hash.includes('access_token')) {
-                    
-                    const newUrl = window.location.href.split('#')[0];
-                    window.history.replaceState(null, '', newUrl);
-                }
-            }
-
-            setUser(session?.user ?? null);
-            setLoading(false);
-        });
-
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             (event, session) => {
-
-                if (window.location.hash && window.location.hash.includes('access_token')) {
-                    if (['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED', 'SIGNED_OUT'].includes(event)) {
-                        const newUrl = window.location.href.split('#')[0];
-                        window.history.replaceState(null, '', newUrl);
-                    }
+                if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+                     // Ensure clean state
+                     setUser(null);
+                     setLoading(false);
+                     // Clear any local storage auth tokens if Supabase doesn't do it automatically
+                     Object.keys(localStorage).forEach(key => {
+                         if (key.startsWith('sb-')) localStorage.removeItem(key);
+                     });
+                } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                    setUser(session?.user ?? null);
+                    setLoading(false);
+                } else if (event === 'INITIAL_SESSION') {
+                     // Handle initial load
+                     setUser(session?.user ?? null);
+                     setLoading(false);
                 }
-
-                setUser(session?.user ?? null);
-                setLoading(false);
             }
         );
+
+        // Check initial session
+        supabase.auth.getSession().then(({ data: { session }, error }) => {
+            if (error) {
+                console.error("Auth session error:", error);
+                // If token is invalid (e.g. refresh token not found), force logout logic
+                if (error.message && (error.message.includes("Refresh Token") || error.message.includes("Invalid"))) {
+                    supabase.auth.signOut();
+                    setUser(null);
+                }
+            } else {
+                setUser(session?.user ?? null);
+            }
+            setLoading(false);
+        });
 
         return () => subscription.unsubscribe();
     }, []);

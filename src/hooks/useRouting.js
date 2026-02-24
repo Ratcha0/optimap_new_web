@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import L from 'leaflet';
 import { calculateDistance } from '../utils/geoUtils';
 import { formatTime, translateInstruction } from '../utils/mapUtils';
 import { ROUTING_API } from '../constants/api';
@@ -17,7 +16,8 @@ export const useRouting = ({
     setRerouteTrigger,
     completedWaypoints,
     originalStart,
-    currentLegIndex
+    currentLegIndex,
+    isOnline = true
 }) => {
     const [routeLegs, setRouteLegs] = useState([]);
     const [routePath, setRoutePath] = useState([]);
@@ -40,6 +40,9 @@ export const useRouting = ({
         setNavigationSteps([]);
         setVisitOrder({});
         setLegTargetIndices([]);
+        lastWaypointsRef.current = "";
+        lastRoutedPos.current = null;
+        setError(null);
     }, []);
 
     useEffect(() => {
@@ -55,27 +58,39 @@ export const useRouting = ({
         const waypointsStr = JSON.stringify(validWps) + `-${tripType}-${travelMode}`;
         const waypointsChanged = waypointsStr !== lastWaypointsRef.current;
 
-        if (!waypointsChanged && lastRoutedPos.current) {
+        if (!waypointsChanged && lastRoutedPos.current && !error && routePath.length > 0) {
             if (isNavigating && rerouteTrigger === 0) return;
-            const dist = L.latLng(startPoint).distanceTo(lastRoutedPos.current);
+            const dist = calculateDistance(startPoint[0], startPoint[1], lastRoutedPos.current[0], lastRoutedPos.current[1]);
             if (!isNavigating && dist < 30) return;
         }
 
+        if (!isOnline && routePath.length === 0) {
+            setError("ออฟไลน์: ไม่สามารถคำนวณเส้นทางได้");
+            return;
+        }
+
         lastWaypointsRef.current = waypointsStr;
-        let wpsWithIndex = validWps.map((wp, i) => ({ coords: wp, originalIndex: i }));
+        let wpsWithIndex = waypoints
+            .map((wp, i) => ({ coords: wp, originalIndex: i }))
+            .filter(w => w.coords !== null);
+        
         if (isNavigating) {
             wpsWithIndex = wpsWithIndex.filter(w => !completedWaypoints.has(w.originalIndex));
-        } else if (tripType === 'oneway') {
-            wpsWithIndex.sort((a, b) => calculateDistance(startPoint[0], startPoint[1], a.coords[0], a.coords[1]) - calculateDistance(startPoint[0], startPoint[1], b.coords[0], b.coords[1]));
         }
 
         const sortedWps = wpsWithIndex.map(w => w.coords);
         let coords = [startPoint, ...sortedWps];
         let indices = [-1, ...wpsWithIndex.map(w => w.originalIndex)];
 
-        if (tripType === 'roundtrip' && isNavigating && originalStart) {
-            coords.push(originalStart);
-            indices.push(-2);
+        if (tripType === 'roundtrip') {
+            if (isNavigating && originalStart) {
+                coords.push(originalStart);
+                indices.push(-2);
+            } else if (!isNavigating) {
+               
+                coords.push(startPoint);
+                indices.push(-2);
+            }
         }
 
         if (coords.length < 2) {
@@ -91,7 +106,8 @@ export const useRouting = ({
         if (apiMode === 'bike') baseUrl = ROUTING_API.OSM_BIKE;
         if (apiMode === 'foot') baseUrl = ROUTING_API.OSM_FOOT;
 
-        let service = (tripType === 'roundtrip' && !isNavigating) ? 'trip' : 'route';
+        
+        let service = 'route';
         const options = `steps=true&geometries=geojson&overview=full`;
 
         const fetchRoute = async (url) => {
@@ -116,15 +132,16 @@ export const useRouting = ({
             let legs, sortedOriginalIndices, totalDistance = 0, totalSecs = 0;
             const adjustTime = (sec) => travelMode === 'motorbike' ? sec * 0.7 : sec;
 
-            if (service === 'trip' && data.trips) {
+            if (data.routes) {
+                const route = data.routes[0];
+                legs = route.legs; totalDistance = route.distance; totalSecs = adjustTime(route.duration);
+                sortedOriginalIndices = [...inputIndicesMap];
+            } else if (data.trips) {
+               
                 const trip = data.trips[0];
                 legs = trip.legs; totalDistance = trip.distance; totalSecs = adjustTime(trip.duration);
                 sortedOriginalIndices = data.waypoints.map(wp => inputIndicesMap[wp.waypoint_index]);
                 if (tripType === 'roundtrip') sortedOriginalIndices.push(-2);
-            } else if (data.routes) {
-                const route = data.routes[0];
-                legs = route.legs; totalDistance = route.distance; totalSecs = adjustTime(route.duration);
-                sortedOriginalIndices = [...inputIndicesMap];
             }
 
             if (legs) {
@@ -195,7 +212,8 @@ export const useRouting = ({
             .finally(() => {
                 if (service !== 'trip') setIsLoading(false);
             });
-    }, [startPoint, waypoints, locationNames, travelMode, tripType, isNavigating, rerouteTrigger, completedWaypoints, originalStart, currentLegIndex, setRerouteTrigger, clearRoute, routePath.length]);
+    }, [startPoint, waypoints, locationNames, travelMode, tripType, isNavigating, rerouteTrigger, completedWaypoints, originalStart, currentLegIndex, setRerouteTrigger, clearRoute, routePath.length, isOnline]);
+
 
     return {
         routeLegs,

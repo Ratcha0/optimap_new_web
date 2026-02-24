@@ -11,6 +11,7 @@ import { MAP_CONFIG } from '../../constants/visuals';
 import { calculateDistance, calculateRemainingDistance } from '../../utils/geoUtils';
 import { formatTime } from '../../utils/mapUtils';
 import NavigationOverlay from './technician/NavigationOverlay';
+import HUDOverlay from './technician/HUDOverlay';
 import ControlPanel from './technician/ControlPanel';
 import SearchControl from '../map/SearchControl';
 import UrlInputModal from '../modals/UrlInputModal';
@@ -25,11 +26,27 @@ import ArrivalOverlay from './technician/ArrivalOverlay';
 import AuthModal from '../modals/AuthModal';
 import TeamInviteNotification from '../ui/TeamInviteNotification';
 import { useTeamManager } from '../../hooks/useTeamManager';
+import { useTechnicianPersistence } from '../../hooks/useTechnicianPersistence';
+import OfflineWarning from '../ui/OfflineWarning';
 
 export default function TechnicianView({ user, userProfile, sharedLocation }) {
 
-    const [startPoint, setStartPoint] = useState(null);
+    const [startPoint, setStartPoint] = useState(() => {
+        const saved = localStorage.getItem('tech_start_point');
+        return saved ? JSON.parse(saved) : null;
+    });
     const [mapInstance, setMapInstance] = useState(null);
+    const [waypoints, setWaypoints] = useState(() => {
+        const saved = localStorage.getItem('tech_waypoints');
+        return saved ? JSON.parse(saved) : [null];
+    });
+    const [locationNames, setLocationNames] = useState(() => {
+        const saved = localStorage.getItem('tech_location_names');
+        return saved ? JSON.parse(saved) : {};
+    });
+    const [currentHeading, setCurrentHeading] = useState(0);
+    const [activeSelection, setActiveSelection] = useState(null);
+    const [searchResult, setSearchResult] = useState(null);
 
     useEffect(() => {
         if (sharedLocation && mapInstance) {
@@ -43,43 +60,37 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
             }
         }
     }, [sharedLocation, mapInstance]);
-    const [currentHeading, setCurrentHeading] = useState(0);
-    const [waypoints, setWaypoints] = useState(() => {
-        const saved = localStorage.getItem('tech_waypoints');
-        return saved ? JSON.parse(saved) : [null];
-    });
-    const [locationNames, setLocationNames] = useState(() => {
-        const saved = localStorage.getItem('tech_location_names');
-        return saved ? JSON.parse(saved) : {};
-    });
-    const [activeSelection, setActiveSelection] = useState(null);
-    const [searchResult, setSearchResult] = useState(null);
     const [activeMenu, setActiveMenu] = useState(null);
     const [urlModalOpen, setUrlModalOpen] = useState(false);
     const [authModalOpen, setAuthModalOpen] = useState(false);
     const [profileModalOpen, setProfileModalOpen] = useState(false);
     const [urlModalTarget, setUrlModalTarget] = useState({ type: null, idx: null });
     const [viewTarget, setViewTarget] = useState(null);
-    const [currentLegIndex, setCurrentLegIndex] = useState(0);
+    const [currentLegIndex, setCurrentLegIndex] = useState(() => Number(localStorage.getItem('tech_current_leg')) || 0);
     const [currentInstruction, setCurrentInstruction] = useState("");
     const [tripType, setTripType] = useState('oneway');
-    const [completedWaypoints, setCompletedWaypoints] = useState(new Set());
+    const [completedWaypoints, setCompletedWaypoints] = useState(() => {
+        const saved = localStorage.getItem('tech_completed_wps');
+        return saved ? new Set(JSON.parse(saved)) : new Set();
+    });
     const [rerouteTrigger, setRerouteTrigger] = useState(0);
+    const [view3D, setView3D] = useState(false);
+    const [navActive, setNavActive] = useState(() => localStorage.getItem('tech_is_navigating') === 'true');
+    const [isImmersive, setIsImmersive] = useState(() => localStorage.getItem('tech_is_immersive') === 'true');
     const [autoSnapPaused, setAutoSnapPaused] = useState(false);
-    const [isImmersive, setIsImmersive] = useState(false);
     const [travelMode, setTravelMode] = useState(() => localStorage.getItem('tech_travel_mode') || 'driving');
     const [currentSpeed, setCurrentSpeed] = useState(0);
+    const [gpsAccuracy, setGpsAccuracy] = useState(null);
     const [originalStart, setOriginalStart] = useState(null);
     const [viewMode, setViewMode] = useState('map');
     const [activeInviteTicket, setActiveInviteTicket] = useState(null);
     const [isInviteOpen, setIsInviteOpen] = useState(false);
-    const [view3D, setView3D] = useState(false);
+    const [isHudMode, setIsHudMode] = useState(false);
     const { showToast } = useToast();
     const {
         otherTechs,
         myAssignment,
         pendingInvite,
-        setPendingInvite,
         handleAcceptInvite,
         handleDeclineInvite
     } = useTeamManager(user, setViewMode);
@@ -97,39 +108,26 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
     useEffect(() => { startPointRef.current = startPoint; }, [startPoint]);
 
 
-    const [navActive, setNavActive] = useState(false);
-
     const {
         routeLegs, routePath, segments, distance, totalDuration, navigationSteps,
-        visitOrder, legTargetIndices, clearRoute, isLoading: isRouting, error: routingError
+        visitOrder, legTargetIndices, clearRoute, isLoading: isRouting
     } = useRouting({
         startPoint, waypoints, locationNames, travelMode, tripType, isNavigating: navActive,
-        rerouteTrigger, setRerouteTrigger, completedWaypoints, originalStart, currentLegIndex
+        rerouteTrigger, setRerouteTrigger, completedWaypoints, originalStart, currentLegIndex,
+        isOnline
     });
 
-    useEffect(() => {
-        localStorage.setItem('tech_waypoints', JSON.stringify(waypoints));
-    }, [waypoints]);
+    const hasAttemptedResume = useRef(false);
 
-    useEffect(() => {
-        localStorage.setItem('tech_location_names', JSON.stringify(locationNames));
-    }, [locationNames]);
 
-    useEffect(() => {
-        localStorage.setItem('tech_travel_mode', travelMode);
-    }, [travelMode]);
-
-    useEffect(() => {
-        localStorage.setItem('tech_trip_type', tripType);
-    }, [tripType]);
 
     const handleReroute = useCallback((newLat, newLng) => {
-        clearRoute();
         setStartPoint([newLat, newLng]);
         setCurrentLegIndex(0);
         speak("กำลังคำนวณเส้นทางใหม่ค่ะ");
         setRerouteTrigger(prev => prev + 1);
-    }, [speak, clearRoute]);
+    }, []);
+
 
     const handleLegComplete = useCallback((navLegIndex) => {
         const waypointIndexToMark = legTargetIndices[navLegIndex];
@@ -146,15 +144,12 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         routePath, routeLegs, navigationSteps, speak, setStartPoint, setCurrentSpeed,
         setCurrentHeading, setLocationNames, onReroute: handleReroute,
         setCurrentInstruction, mapInstance, isAutoSnapPaused: autoSnapPaused,
+        setAutoSnapPaused,
         setCurrentLegIndex, waypoints, onLegComplete: handleLegComplete,
-        is3D: view3D
+        is3D: view3D,
+        initialPointIndex: Number(localStorage.getItem('tech_current_pt_idx')) || 0,
+        initialLegIndex: currentLegIndex
     });
-
-    useEffect(() => {
-        if (routingError) {
-            showToast(`ไม่สามารถคำนวณเส้นทางได้: ${routingError}`, 'error');
-        }
-    }, [routingError, showToast]);
 
     const {
         isNavigating,
@@ -167,9 +162,64 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         nextManeuver,
         secondNextManeuver,
         isWaitingForContinue,
-        continueNavigation,
-        syncMap: triggerSync
+        continueNavigation: hookContinueNav
     } = nav;
+
+    const { clearPersistence } = useTechnicianPersistence({
+        startPoint, waypoints, locationNames, travelMode, tripType,
+        completedWaypoints, currentLegIndex, navActive, isImmersive,
+        currentPointIndex: currentPointIndex || 0
+    });
+
+    useEffect(() => {
+        if (navActive && !isNavigating && !hasAttemptedResume.current && routePath.length > 0) {
+            hasAttemptedResume.current = true;
+            hookStartNav(true); 
+        }
+    }, [navActive, isNavigating, routePath, hookStartNav]);
+
+
+    useEffect(() => {
+        if (!isOnline && isNavigating) {
+            speak("ขาดการเชื่อมต่ออินเทอร์เน็ต ระบบจะไม่สามารถคำนวณเส้นทางใหม่ได้ในขณะนี้ค่ะ");
+        } else if (isOnline && isNavigating) {
+            speak("กลับมาออนไลน์แล้วค่ะ");
+        }
+    }, [isOnline, isNavigating]);
+
+    const [mapRemountKey, setMapRemountKey] = useState(0);
+
+    const stopNavigation = useCallback(() => {
+        hookStopNav();
+        setIsImmersive(false);
+        speak("สิ้นสุดการนำทางค่ะ");
+        setOriginalStart(null);
+        clearRoute();
+        setWaypoints([null]);
+        setCompletedWaypoints(new Set());
+        setCurrentLegIndex(0);
+        setRerouteTrigger(0);
+        
+        
+        clearPersistence();
+        
+       
+        setMapRemountKey(prev => prev + 1);
+    }, [hookStopNav, clearRoute]);
+
+    const handleContinueNavigation = useCallback(() => {
+     
+        if (routeLegs && currentLegIndex < routeLegs.length - 1) {
+             const nextLeg = currentLegIndex + 1;
+             setCurrentLegIndex(nextLeg);
+             hookContinueNav(); 
+        } else {
+             
+             stopNavigation();
+             showToast('ถึงจุดหมายปลายทางเรียบร้อยแล้ว', 'success');
+        }
+    }, [currentLegIndex, routeLegs, hookContinueNav, stopNavigation, showToast]);
+
 
     useEffect(() => { setNavActive(isNavigating); }, [isNavigating]);
     
@@ -208,8 +258,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
 
     useEffect(() => {
         if (isNavigating) return;
-
-       
+        
         navigator.geolocation.getCurrentPosition(
             (pos) => setStartPoint([pos.coords.latitude, pos.coords.longitude]),
             null,
@@ -218,14 +267,18 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
 
         const watchId = navigator.geolocation.watchPosition(
             (pos) => {
-                const { latitude, longitude, heading, speed } = pos.coords;
+                const { latitude, longitude, heading, speed, accuracy } = pos.coords;
               
                 setStartPoint([latitude, longitude]);
                 if (heading !== null && !isNaN(heading)) setCurrentHeading(heading);
                 setCurrentSpeed(speed || 0);
+                setGpsAccuracy(accuracy);
             },
             (err) => {
-                if (err.code !== 3) console.warn("Location update failed:", err.message);
+                if (err.code !== 3) {
+                    console.warn("Location update failed:", err.message);
+                    setGpsAccuracy(null);
+                }
             },
             { 
                 enableHighAccuracy: true, 
@@ -249,6 +302,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                 const msg = 'ถึงที่หมายแล้วค่ะ';
                 showToast(`🏠 ${msg}`, 'success');
                 speak(msg);
+                setMapRemountKey(prev => prev + 1);
             }
         }
     }, [startPoint, waypoints, isNavigating, clearRoute, showToast]);
@@ -260,7 +314,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
             if (startPointRef.current) {
                 syncPosition(startPointRef.current);
             }
-        }, 2000);
+        }, 5000);
 
         return () => clearInterval(interval);
     }, [user, syncPosition]);
@@ -281,17 +335,6 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         speak("เริ่มระบบจำลองค่ะ");
     };
 
-    const stopNavigation = () => {
-        hookStopNav();
-        setIsImmersive(false);
-        speak("สิ้นสุดการนำทางค่ะ");
-        setOriginalStart(null);
-        clearRoute();
-        setWaypoints([null]);
-        setCompletedWaypoints(new Set());
-        setCurrentLegIndex(0);
-        setRerouteTrigger(0);
-    };
 
 
     const handleStopNavigation = useCallback(() => {
@@ -388,7 +431,6 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                 startIdx = 1;
             }
 
-            const newWps = [];
             let targetStartIdx = (target.type === 'waypoint' && target.idx !== null) ? target.idx : currentWps.findIndex(w => w === null);
             if (targetStartIdx === -1) targetStartIdx = currentWps.length;
 
@@ -425,7 +467,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         if (!newWps.some(w => w !== null) || !startPoint) clearRoute();
     };
 
-    const useCurrentLocation = useCallback(() => {
+    const handleUseCurrentLocation = useCallback(() => {
         if (!navigator.geolocation) {
             showToast('เบราว์เซอร์ไม่รองรับการระบุตำแหน่ง', 'error');
             return;
@@ -496,10 +538,12 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                 onAuthClick={() => setAuthModalOpen(true)}
                 onProfileClick={() => setProfileModalOpen(true)}
                 isOnline={isOnline}
+                gpsAccuracy={gpsAccuracy}
             />
 
-            <main className="flex-grow relative">
+            <main className={`flex-grow relative ${isHudMode ? 'bg-black' : ''}`} style={isHudMode ? { transform: 'scaleX(-1)' } : {}}>
                 <TechnicianMap
+                    key={mapRemountKey}
                     defaultCenter={MAP_CONFIG.DEFAULT_CENTER}
                     setMapInstance={setMapInstance}
                     activeSelection={activeSelection}
@@ -535,6 +579,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                         if (type === 'start') setAutoSnapPaused(true);
                     }}
                     is3D={view3D}
+                    isHudMode={isHudMode}
                 />
 
 
@@ -551,13 +596,16 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                     isImmersive={isImmersive}
                     setIsImmersive={setIsImmersive}
                     onStopNavigation={handleStopNavigation}
-                    onContinueNavigation={continueNavigation}
+                    onContinueNavigation={handleContinueNavigation}
+                    onHUDToggle={() => setIsHudMode(true)}
                     onRecenter={() => setAutoSnapPaused(false)}
                     eta={eta}
                     remainingDistance={remainingDistance}
                     nextManeuver={nextManeuver}
                     secondNextManeuver={secondNextManeuver}
+                    isHudMode={isHudMode}
                 />
+                {!isOnline && <OfflineWarning isNavigating={isNavigating} />}
 
 
                 {!isNavigating && !isImmersive && !activeSelection && (
@@ -573,10 +621,11 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                 )}
 
 
-                <div className="fixed bottom-[15%] right-4 z-[900] flex flex-col gap-3">
+                {!isHudMode && (
+                <div className="fixed bottom-[10%] right-4 z-[900] flex flex-col gap-3">
                     <button
                         onClick={() => setView3D(!view3D)}
-                        className={`w-12 h-12 rounded-2xl shadow-xl flex items-center justify-center transition-all active:scale-90 border font-black text-xs ${
+                        className={`w-10 h-10 rounded-2xl shadow-xl flex items-center justify-center transition-all active:scale-90 border font-black text-xs ${
                             view3D
                             ? 'bg-blue-600 text-white border-blue-400' 
                             : 'bg-white text-blue-600 border-gray-100'
@@ -589,16 +638,17 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                     <button
                         onClick={() => {
                             setAutoSnapPaused(false);
-                            if (isNavigating) {
-                                triggerSync(true); 
+                            if (isNavigating && startPoint) {
+                                if (nav && nav.syncMap) {
+                                    nav.syncMap(true);
+                                }
                             } else if (startPoint) {
                                 setViewTarget({ coords: startPoint, zoom: 17, t: Date.now() });
-                                mapInstance && mapInstance.flyTo(startPoint, 17);
                             } else {
-                                useCurrentLocation();
+                                handleUseCurrentLocation();
                             }
                         }}
-                        className={`w-12 h-12 rounded-2xl shadow-xl flex items-center justify-center transition-all active:scale-90 border ${
+                        className={`w-10 h-10 rounded-2xl shadow-xl flex items-center justify-center transition-all active:scale-90 border ${
                             !autoSnapPaused && (isNavigating || !autoSnapPaused)
                             ? 'bg-blue-600 text-white border-blue-400' 
                             : 'bg-white text-blue-600 border-gray-100'
@@ -610,6 +660,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                         </svg>
                     </button>
                 </div>
+                )}
 
 
                 {activeSelection?.type === 'home-picking' && activeSelection?.status !== 'confirmed' && (
@@ -628,6 +679,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
             </main>
 
 
+            {!isHudMode && (
             <div className="z-[1001]">
                 <ControlPanel
                     isImmersive={isImmersive} setIsImmersive={setIsImmersive} startPoint={startPoint} waypoints={waypoints}
@@ -637,7 +689,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                     isNavigating={isNavigating} totalDuration={liveDuration || totalDuration} segments={segments}
                     setTripType={setTripType} setTravelMode={setTravelMode} startNavigation={startNavigation}
                     simulateNavigation={simulateNavigation} stopNavigation={handleStopNavigation} handleViewLocation={handleViewLocation}
-                    useCurrentLocation={useCurrentLocation} handleUrlInput={handleUrlInput}
+                    useCurrentLocation={handleUseCurrentLocation} handleUrlInput={handleUrlInput}
                     setActiveSelection={setActiveSelection} setActiveMenu={setActiveMenu}
                     addWaypoint={addWaypoint} removeWaypoint={removeWaypoint} user={user}
                     viewMode={viewMode} setViewMode={setViewMode} pendingJobsCount={pendingJobsCount}
@@ -650,8 +702,11 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                     eta={eta}
                     remainingDistance={remainingDistance}
                     isRouting={isRouting}
+                    setCompletedWaypoints={setCompletedWaypoints}
+                    setCurrentLegIndex={setCurrentLegIndex}
                 />
             </div>
+            )}
 
 
             <UrlInputModal
@@ -661,6 +716,19 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
             />
 
             <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+            
+            {isHudMode && (
+                <HUDOverlay 
+                    isNavigating={isNavigating}
+                    nextManeuver={nextManeuver}
+                    currentSpeed={currentSpeed}
+                    remainingDistance={remainingDistance}
+                    eta={eta}
+                    onClose={() => setIsHudMode(false)}
+                    isHudMode={isHudMode}
+                />
+            )}
+
             <UserProfile
                 isOpen={profileModalOpen}
                 onClose={() => setProfileModalOpen(false)}
@@ -681,7 +749,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
 
             <ArrivalOverlay
                 isVisible={isWaitingForContinue}
-                onContinue={continueNavigation}
+                onContinue={handleContinueNavigation}
             />
 
             <TeamInviteNotification

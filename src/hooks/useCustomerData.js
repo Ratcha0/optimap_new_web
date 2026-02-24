@@ -16,7 +16,7 @@ export function useCustomerData(user) {
         if (!user) return;
         
         await retryOperation(async () => {
-            // 1. Fetch active tickets for this user
+          
             const { data: tickets, error: ticketError } = await supabase
                 .from('support_tickets')
                 .select('id, technician_id')
@@ -33,7 +33,7 @@ export function useCustomerData(user) {
             const ticketIds = tickets.map(t => t.id);
             const primaryTechIds = tickets.map(t => t.technician_id).filter(id => id !== null);
 
-            // 2. Fetch additional team members from assignments
+         
             const { data: assignments, error: assignError } = await supabase
                 .from('ticket_assignments')
                 .select('technician_id, ticket_id')
@@ -44,7 +44,7 @@ export function useCustomerData(user) {
 
             const assignedTechIds = assignments ? assignments.map(a => a.technician_id) : [];
             
-            // Combine all unique technician IDs
+        
             const allTechIds = [...new Set([...primaryTechIds, ...assignedTechIds])];
 
             if (allTechIds.length === 0) {
@@ -52,7 +52,7 @@ export function useCustomerData(user) {
                 return;
             }
 
-            // 3. Fetch profiles for all these technicians
+            
             const { data, error: profileError } = await supabase
                 .from('profiles')
                 .select(`

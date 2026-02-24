@@ -18,10 +18,10 @@ export default function BaseModal({
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[11000] flex items-center justify-center p-4 animate-in fade-in duration-300">
             <div className={`bg-white w-full ${maxWidth} rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 relative`}>
                 
-                {/* Header Decoration */}
+            
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-purple-600 z-10"></div>
 
-                {/* Header */}
+              
                 {(title || Icon) && (
                     <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-white relative">
                         <div className="flex items-center gap-4">
@@ -46,12 +46,12 @@ export default function BaseModal({
                     </div>
                 )}
 
-                {/* Content */}
+               
                 <div className="flex-1 overflow-hidden flex flex-col">
                     {children}
                 </div>
 
-                {/* Footer */}
+               
                 {footer && (
                     <div className="p-6 bg-gray-50 border-t border-gray-100">
                         {footer}

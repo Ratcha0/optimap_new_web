@@ -96,11 +96,11 @@ const AdminDashboard = ({ user, userProfile }) => {
             if (profileRes.data) setLocalProfile(profileRes.data);
             const allProfiles = allProfilesRes.data || [];
 
-            // Filter techs and users
+         
             const rawTechs = allProfiles.filter(p => p.role === 'technician');
             const currentUsers = allProfiles.filter(p => p.role === 'user');
 
-            // ดึงข้อมูลทีม: งานที่ยังไม่จบ + assignments ที่ accepted
+     
             const { data: activeTickets } = await supabase
                 .from('support_tickets')
                 .select('id, technician_id')
@@ -116,26 +116,23 @@ const AdminDashboard = ({ user, userProfile }) => {
                 activeAssignments = (data || []).filter(a => ticketIds.includes(a.ticket_id));
             }
 
-            
-            
-
-            // สร้าง Map หัวหน้าทีมของแต่ละ ticket
+       
             const ticketLeaderMap = {};
             (activeTickets || []).forEach(t => {
                 const leader = rawTechs.find(tech => tech.id === t.technician_id);
                 ticketLeaderMap[t.id] = { leaderId: t.technician_id, leaderName: leader?.full_name || 'ไม่ทราบ' };
             });
 
-            // เพิ่มข้อมูลทีมให้ช่างแต่ละคน
+        
             const currentTechs = rawTechs.map(tech => {
-                // เช็คว่าเป็นหัวหน้าทีมหรือไม่
+         
                 const headTicket = (activeTickets || []).find(t => t.technician_id === tech.id);
                 if (headTicket) {
                     const memberCount = activeAssignments.filter(a => a.ticket_id === headTicket.id).length;
                     return { ...tech, active_ticket_id: headTicket.id, is_primary: true, team_leader_name: null, team_member_count: memberCount };
                 }
 
-                // เช็คว่าเป็นลูกทีมหรือไม่
+              
                 const myAssignment = activeAssignments.find(a => a.technician_id === tech.id);
                 if (myAssignment) {
                     const leader = ticketLeaderMap[myAssignment.ticket_id];
@@ -170,7 +167,7 @@ const AdminDashboard = ({ user, userProfile }) => {
             }
             setJobs(finalJobs);
 
-            // เพิ่มจำนวนงานให้ผู้ใช้แต่ละคน
+       
             const usersWithJobs = currentUsers.map(u => ({
                 ...u,
                 jobCount: finalJobs.filter(j => j.user_id === u.id).length
@@ -190,7 +187,7 @@ const AdminDashboard = ({ user, userProfile }) => {
                 completedJobs: completed
             });
         } catch (err) {
-            
+           
         } finally {
             if (!silent) setLoading(false);
         }

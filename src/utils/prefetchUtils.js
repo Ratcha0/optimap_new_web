@@ -10,7 +10,7 @@ export const prefetchRouteTiles = (path, zoomLevels = [16, 17, 18]) => {
             const x = Math.floor((point[1] + 180) / 360 * Math.pow(2, z));
             const y = Math.floor((1 - Math.log(Math.tan(point[0] * Math.PI / 180) + 1 / Math.cos(point[0] * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, z));
             
-            // Generate for current and 8 neighbors to be safe
+            
             for (let dx = -1; dx <= 1; dx++) {
                 for (let dy = -1; dy <= 1; dy++) {
                     const sub = ['a', 'b', 'c'][Math.abs(x + dx + y + dy) % 3];
@@ -26,7 +26,7 @@ export const prefetchRouteTiles = (path, zoomLevels = [16, 17, 18]) => {
         });
     });
 
-    // Send only up to 500 tiles at once to not choke the worker
+   
     const tileList = Array.from(tiles).slice(0, 500);
     navigator.serviceWorker.controller.postMessage({
         type: 'PREFETCH_TILES',

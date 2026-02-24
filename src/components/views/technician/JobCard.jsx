@@ -25,7 +25,9 @@ export default function JobCard({
                             alt="Avatar"
                             className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl object-cover border-2 border-gray-100 shadow-md"
                             onError={(e) => {
-                                e.target.src = EXTERNAL_LINKS.GOOGLE_AUTH_ICON;
+                                if (e.target.src !== EXTERNAL_LINKS.GOOGLE_AUTH_ICON) {
+                                    e.target.src = EXTERNAL_LINKS.GOOGLE_AUTH_ICON;
+                                }
                             }}
                         />
                         <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
@@ -65,7 +67,7 @@ export default function JobCard({
                     </div>
                 )}
 
-                {/* Team Members Display */}
+               
                 {job.ticket_assignments?.filter(a => (a.status === 'accepted' || a.role === 'primary' || a.role === 'technician') && a.profiles).length > 0 && (
                     <div className="pt-2 border-t border-gray-100">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -79,7 +81,10 @@ export default function JobCard({
                                         className="w-4 h-4 rounded-md object-cover"
                                         alt=""
                                         onError={(e) => {
-                                            e.target.src = `https://ui-avatars.com/api/?name=${assign.profiles?.full_name || 'T'}&background=random`;
+                                            const fallback = `https://ui-avatars.com/api/?name=${assign.profiles?.full_name || 'T'}&background=random`;
+                                            if (e.target.src !== fallback) {
+                                                e.target.src = fallback;
+                                            }
                                         }}
                                     />
                                     <span className="text-[9px] font-bold text-gray-700">{assign.profiles?.full_name?.split(' ')[0]}</span>

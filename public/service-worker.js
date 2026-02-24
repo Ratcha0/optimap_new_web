@@ -46,11 +46,20 @@ self.addEventListener('fetch', (event) => {
                         return response;
                     }
                     return fetch(event.request).then((networkResponse) => {
-                        if (networkResponse && networkResponse.status === 200) {
-                            cache.put(event.request, networkResponse.clone());
+                        if (!networkResponse || networkResponse.status !== 200) {
+                            return networkResponse;
                         }
+
+                        const responseToCache = networkResponse.clone();
+                        caches.open(TILE_CACHE).then((cache) => {
+                            cache.put(event.request, responseToCache);
+                        });
+
                         return networkResponse;
-                    }).catch(() => {});
+                    }).catch((error) => {
+                        console.error('Fetching failed:', error);
+                        throw error;
+                    });
                 });
             })
         );
@@ -64,6 +73,13 @@ self.addEventListener('fetch', (event) => {
             })
         );
         return;
+    }
+
+    // For development, bypass cache for HMR and source files
+    const urlStr = url.toString();
+    if (urlStr.includes('localhost') || urlStr.includes('@vite') || urlStr.includes('@react-refresh') || urlStr.includes('node_modules') || url.port === '3000') {
+         // Network only for dev server stuff
+         return; 
     }
 
     event.respondWith(

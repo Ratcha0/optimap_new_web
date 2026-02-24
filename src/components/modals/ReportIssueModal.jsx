@@ -34,8 +34,6 @@ export default function ReportIssueModal({ isOpen, onClose, onSubmit, myPosition
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[11000] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-500 overflow-y-auto">
             <div className="bg-white w-full max-w-2xl min-w-[300px] my-auto rounded-[2rem] sm:rounded-[3rem] shadow-2xl relative animate-in zoom-in-95 duration-500 overflow-hidden">
-
-                {/* Orange Header Section */}
                 <div className="bg-gradient-to-br from-orange-400 via-amber-500 to-red-500 px-6 sm:px-8 pt-6 sm:pt-10 pb-16 sm:pb-20 text-center relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-full opacity-30 pointer-events-none">
                         <div className="absolute -top-24 -left-24 w-64 h-64 bg-white/20 rounded-full blur-3xl animate-pulse"></div>
@@ -60,7 +58,7 @@ export default function ReportIssueModal({ isOpen, onClose, onSubmit, myPosition
                     </div>
                 </div>
 
-                {/* White Content Section (Overlap) */}
+               
                 <div className="px-6 pb-12 -mt-12 relative z-20">
                     <div className="bg-white/95 backdrop-blur-3xl rounded-[2.5rem] p-6 shadow-2xl border border-white/50">
                         <form onSubmit={handleSubmit} className="space-y-6">

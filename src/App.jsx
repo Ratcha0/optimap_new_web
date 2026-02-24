@@ -5,10 +5,11 @@ import { ToastProvider } from './components/ui/ToastNotification'
 import LoadingScreen from './components/ui/LoadingScreen'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 
-// Lazy load heavy views
+
 const TechnicianView = lazy(() => import('./components/views/TechnicianView'));
 const CustomerView = lazy(() => import('./components/views/CustomerView'));
 const AdminDashboard = lazy(() => import('./components/views/admin/AdminDashboard'));
+
 
 function App() {
   const { user, loading: authLoading } = useAuth();
@@ -16,10 +17,11 @@ function App() {
   const [profileLoading, setProfileLoading] = useState(true);
 
   const [sharedLocation, setSharedLocation] = useState(null);
+  
 
   useEffect(() => {
-    // Check for shared location in URL
     const params = new URLSearchParams(window.location.search);
+
     const lat = parseFloat(params.get('share_lat'));
     const lng = parseFloat(params.get('share_lng'));
     const pointsStr = params.get('points');

@@ -193,8 +193,10 @@ export default function UserProfile({ isOpen, onClose, user: propUser, onUpdate,
                                     alt="Avatar" 
                                     className="w-full h-full object-cover" 
                                     onError={(e) => {
-                                        e.target.style.display = 'none';
-                                        e.target.nextSibling.style.display = 'flex';
+                                        if (e.target.style.display !== 'none') {
+                                            e.target.style.display = 'none';
+                                            if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                        }
                                     }}
                                 />
                             ) : null}

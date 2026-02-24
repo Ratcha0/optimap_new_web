@@ -245,8 +245,8 @@ export function useTeamManager(user, setViewMode) {
             .subscribe();
 
         return () => {
-            supabase.removeChannel(inviteChannel);
-            supabase.removeChannel(dataSyncChannel);
+            if (inviteChannel) supabase.removeChannel(inviteChannel);
+            if (dataSyncChannel) supabase.removeChannel(dataSyncChannel);
             clearInterval(pollInterval);
         };
     }, [user?.id, fetchOtherTechs, fetchMyAssignment, checkPendingInvite, fetchInviteDetails]);

@@ -228,7 +228,7 @@ export default function JobListView({ user, onAcceptJob, setViewMode }) {
                 )}
             </main>
 
-            {/* Modals at Root Level */}
+           
             {activeTicket && (
                 <MessageModal
                     isOpen={isMessageOpen}

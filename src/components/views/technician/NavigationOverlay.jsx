@@ -10,12 +10,13 @@ export default function NavigationOverlay({
     isImmersive,
     onStopNavigation,
     onContinueNavigation,
-    onRecenter,
+    onHUDToggle,
     remainingDistance,
     nextManeuver,
-    secondNextManeuver
+    secondNextManeuver,
+    isHudMode
 }) {
-    if (!isNavigating && currentSpeed <= 0 && !isImmersive) return null;
+    if ((!isNavigating && currentSpeed <= 0 && !isImmersive) || isHudMode) return null;
 
     const formatDistance = (m) => {
         if (!m) return '0 ม.';
@@ -65,12 +66,23 @@ export default function NavigationOverlay({
                             )}
                         </div>
 
-                        <button
-                            onClick={onStopNavigation}
-                            className="bg-black/20 hover:bg-black/40 text-white font-black px-2.5 sm:px-4 py-1.5 sm:py-2.5 rounded-xl text-[8px] sm:text-[10px] uppercase tracking-widest transition-all active:scale-90 border border-white/10 shrink-0"
-                        >
-                            สิ้นสุด
-                        </button>
+                        <div className="flex flex-col gap-1.5">
+                            <button
+                                onClick={onHUDToggle}
+                                className="bg-white/10 hover:bg-white/20 text-white font-black px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-lg text-[7px] sm:text-[9px] uppercase tracking-widest transition-all active:scale-90 border border-white/5 shrink-0 flex items-center justify-center gap-1"
+                            >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                HUD
+                            </button>
+                            <button
+                                onClick={onStopNavigation}
+                                className="bg-red-500/20 hover:bg-red-500/40 text-red-100 font-black px-2.5 sm:px-4 py-1.5 sm:py-2.5 rounded-lg text-[8px] sm:text-[10px] uppercase tracking-widest transition-all active:scale-90 border border-red-500/20 shrink-0"
+                            >
+                                สิ้นสุด
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

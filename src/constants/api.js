@@ -3,7 +3,9 @@ export const MAP_TILE_URL_SECONDARY = 'https://{s}.basemaps.cartocdn.com/rastert
 
 export const SEARCH_API = {
     PHOTON: 'https://photon.komoot.io/api/',
-    NOMINATIM: 'https://nominatim.openstreetmap.org'
+    NOMINATIM: 'https://nominatim.openstreetmap.org',
+    MAPTILER: 'https://api.maptiler.com/geocoding',
+    MAPTILER_KEY: import.meta.env.VITE_MAPTILER_API_KEY || ''
 };
 
 export const ROUTING_API = {
@@ -19,10 +21,10 @@ export const EXTERNAL_LINKS = {
     DEFAULT_AVATAR: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
     VIOLET_MARKER: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-violet.png',
 
-    // Helper to generate Google Maps directions URL (starts navigation from current location)
+   
     getGoogleMapsUrl: (lat, lng) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
 
-    // Helper to generate internal app share URL
+   
     getAppShareUrl: (lat, lng) => {
         const origin = window.location.origin;
         const pathname = window.location.pathname;

@@ -21,6 +21,7 @@ import technicialcar from '../../assets/technicialcar.png';
 export default function CustomerView({ user, sharedLocation }) {
     const { showToast } = useToast();
     const [myPosition, setMyPosition] = useState(null);
+    const [gpsAccuracy, setGpsAccuracy] = useState(null);
     const [mapInstance, setMapInstance] = useState(null);
     const [autoSnapPaused, setAutoSnapPaused] = useState(false);
 
@@ -126,13 +127,56 @@ export default function CustomerView({ user, sharedLocation }) {
     };
 
     const useCurrentLocation = useCallback(() => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(async (pos) => {
-                const { latitude, longitude } = pos.coords;
-                setMyPosition([latitude, longitude]);
-                updateLocationName('start', latitude, longitude);
-            });
+        if (!navigator.geolocation) {
+             showToast('เบราว์เซอร์ไม่รองรับการระบุตำแหน่ง', 'error');
+             return;
         }
+
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            const { latitude, longitude } = pos.coords;
+            setMyPosition([latitude, longitude]);
+            updateLocationName('start', latitude, longitude);
+            if (mapInstance) {
+                mapInstance.flyTo([latitude, longitude], 15);
+            }
+        });
+    }, [updateLocationName, mapInstance, showToast]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || !navigator.geolocation) return;
+
+        // Get initial position
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const coords = [pos.coords.latitude, pos.coords.longitude];
+                setMyPosition(coords);
+                updateLocationName('start', coords[0], coords[1]);
+            },
+            null,
+            { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+        );
+
+        // Watch position
+        const watchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                const { latitude, longitude, accuracy } = pos.coords;
+                setMyPosition([latitude, longitude]);
+                setGpsAccuracy(accuracy);
+            },
+            (err) => {
+                if (err.code !== 3) {
+                    console.warn("Location watch error:", err.message);
+                    setGpsAccuracy(null);
+                }
+            },
+            { 
+                enableHighAccuracy: true, 
+                timeout: 20000, 
+                maximumAge: 1000 
+            }
+        );
+
+        return () => navigator.geolocation.clearWatch(watchId);
     }, [updateLocationName]);
 
     const handleReportIssue = () => {
@@ -158,20 +202,6 @@ export default function CustomerView({ user, sharedLocation }) {
             if (userProfile?.home_lat && userProfile?.home_lng) {
                 issueLat = userProfile.home_lat;
                 issueLng = userProfile.home_lng;
-
-                if (userProfile.address) {
-                    details = details + `\n(ที่อยู่จากโปรไฟล์: ${userProfile.address})`;
-                }
-            }
-        }
-
-        // Reverse geocode to get location name
-        let locationName = null;
-        if (issueLat && issueLng) {
-            try {
-                locationName = await reverseGeocode(issueLat, issueLng);
-            } catch (e) {
-                
             }
         }
 
@@ -181,7 +211,6 @@ export default function CustomerView({ user, sharedLocation }) {
             description: details,
             lat: issueLat,
             lng: issueLng,
-            location_name: locationName,
             car_reg_number: carData.car_number,
             car_reg_text: carData.car_reg,
             car_reg_province: carData.province,
@@ -222,6 +251,7 @@ export default function CustomerView({ user, sharedLocation }) {
                 hasNotifications={false}
                 userProfile={userProfile}
                 onProfileClick={() => setProfileModalOpen(true)}
+                gpsAccuracy={gpsAccuracy}
             />
 
             <main className="flex-grow relative">
@@ -240,6 +270,7 @@ export default function CustomerView({ user, sharedLocation }) {
                     waypoints={waypoints}
                     setWaypoints={setWaypoints}
                     locationNames={locationNames}
+                    visitOrder={visitOrder}
                     autoSnapPaused={autoSnapPaused}
                     onMapInteract={() => setAutoSnapPaused(true)}
                 />
@@ -303,7 +334,7 @@ export default function CustomerView({ user, sharedLocation }) {
                             setWaypoints([]);
                             showToast('ยกเลิกการแสดงเส้นทางเรียบร้อยแล้ว', 'info');
                         }}
-                        className="fixed bottom-[35%] right-4 z-[9999] w-12 h-12 bg-red-500 rounded-2xl shadow-xl flex flex-col items-center justify-center text-white hover:bg-red-600 transition-all active:scale-90 border border-red-400 group"
+                        className="fixed bottom-[17%] right-4 z-[999] w-12 h-12 bg-red-500 rounded-2xl shadow-xl flex flex-col items-center justify-center text-white hover:bg-red-600 transition-all active:scale-90 border border-red-400 group"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" />

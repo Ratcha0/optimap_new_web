@@ -51,7 +51,7 @@ const TripHistory = () => {
                 .order('updated_at', { ascending: false });
 
             if (error) {
-                
+               
                 showToast("ไม่สามารถโหลดประวัติการเดินทางได้", "error");
                 const { data: fallbackData } = await supabase
                     .from('support_tickets')
@@ -96,15 +96,6 @@ const TripHistory = () => {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-
-                {/* <div className="flex gap-2 w-full md:w-auto">
-                    <button
-                        onClick={fetchTrips}
-                        className="flex items-center gap-2 px-4 py-3 bg-blue-50 text-blue-600 border border-blue-100 rounded-2xl text-sm font-bold hover:bg-blue-100 transition-colors shadow-sm"
-                    >
-                        รีเฟรชข้อมูล
-                    </button>
-                </div> */}
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:gap-4">

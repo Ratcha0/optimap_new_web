@@ -58,7 +58,7 @@ export function useConnectionManager(user) {
 
                 if (error) throw error;
             } catch (err) {
-                
+               
                 remainingQueue.push(item);
             }
         }

@@ -1,7 +1,17 @@
 import React from 'react';
 
-export default function TechnicianHeader({ title, pendingCount, onShowJobs, userProfile, user, onAuthClick, onProfileClick, isImmersive, isOnline }) {
+export default function TechnicianHeader({ title, pendingCount, onShowJobs, userProfile, user, onAuthClick, onProfileClick, isImmersive, isOnline, gpsAccuracy }) {
     const isUserAuthenticated = user?.role === 'authenticated';
+
+    const getSignalInfo = (acc) => {
+        if (acc === null || acc === undefined || isNaN(acc)) return { bars: 0, color: 'bg-gray-300' };
+        if (acc <= 10) return { bars: 4, color: 'bg-green-500' };
+        if (acc <= 25) return { bars: 3, color: 'bg-green-400' };
+        if (acc <= 60) return { bars: 2, color: 'bg-orange-400' };
+        return { bars: 1, color: 'bg-red-500' };
+    };
+
+    const signal = getSignalInfo(gpsAccuracy);
 
     if (isImmersive) return null;
 
@@ -10,16 +20,27 @@ export default function TechnicianHeader({ title, pendingCount, onShowJobs, user
             <header className="flex items-center justify-between px-3 sm:px-6 py-1.5 sm:py-4 bg-white text-gray-900 shadow-md relative overflow-hidden backdrop-blur-md border-b border-gray-100/50">
                 <div className="flex items-center gap-2.5 sm:gap-6 z-10">
                     <div className="flex items-center gap-2">
-                        <div className={`w-2.5 h-2.5 ${isOnline ? 'bg-green-500 shadow-[0_0_15px_rgba(34,197,94,0.6)]' : 'bg-red-500 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.6)]'} rounded-full`}></div>
-                        {!isOnline && (
-                            <span className="bg-red-100 text-red-600 text-[8px] sm:text-[10px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter sm:tracking-widest animate-pulse border border-red-200">
-                                Offline
-                            </span>
-                        )}
+                        {/* GPS Signal Bars with Accuracy Label */}
+                        <div className="flex flex-col items-center">
+                            <div className="flex items-end gap-[2px] h-3.5 w-5 mb-0.5">
+                                {[1, 2, 3, 4].map((b) => (
+                                    <div 
+                                        key={b}
+                                        style={{ height: `${b * 25}%` }}
+                                        className={`w-1 rounded-full transition-all duration-500 ${b <= signal.bars ? signal.color : 'bg-gray-200'}`}
+                                    />
+                                ))}
+                            </div>
+                            {gpsAccuracy && (
+                                <span className={`text-[7px] font-black leading-none ${signal.bars <= 1 ? 'text-red-500' : 'text-gray-400'}`}>
+                                    {Math.round(gpsAccuracy)}m
+                                </span>
+                            )}
+                        </div>
                     </div>
                     <div className="flex flex-col">
                         <h1 className="text-xs sm:text-lg font-bold text-gray-900 tracking-wide leading-tight truncate max-w-[120px] sm:max-w-none">{title || 'Smart Tracking'}</h1>
-                        <span className="text-[7px] sm:text-[10px] font-bold text-blue-500 uppercase tracking-[0.2em] mt-0.5">
+                        <span className="text-[7px] sm:text-[10px] font-bold text-blue-500 uppercase tracking-[0.2em] mt-0.5 flex items-center gap-1.5">
                             {user ? (userProfile?.role === 'technician' ? 'Technician Mode' : 'Guest Mode') : 'Guest Mode'}
                         </span>
                     </div>
@@ -49,8 +70,10 @@ export default function TechnicianHeader({ title, pendingCount, onShowJobs, user
                                     alt="Profile" 
                                     className="w-full h-full object-cover"
                                     onError={(e) => {
-                                        e.target.style.display = 'none';
-                                        e.target.nextSibling.style.display = 'flex';
+                                        if (e.target.style.display !== 'none') {
+                                            e.target.style.display = 'none';
+                                            if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                        }
                                     }}
                                 />
                             ) : null}

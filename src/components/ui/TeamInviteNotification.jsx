@@ -6,7 +6,7 @@ export default function TeamInviteNotification({ invite, onAccept, onDecline }) 
 
     return (
         <div className="fixed inset-0 flex items-center justify-center z-[99999] animate-in fade-in duration-300 pointer-events-none">
-            {/* Backdrop */}
+           
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-auto"></div>
             
             <div className="relative w-[90%] max-w-md animate-in zoom-in-95 duration-300 pointer-events-auto">

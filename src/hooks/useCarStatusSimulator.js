@@ -20,19 +20,28 @@ export function useCarStatusSimulator(user, userProfile, isNavigating, currentSp
         if (!user || (userProfile?.role !== 'technician' && userProfile?.role !== 'admin')) return;
 
         const interval = setInterval(async () => {
-            const hasProblem = Math.random() < 0.40;
-            const engineTemp = (hasProblem) ? 96 + Math.random() * 5 : 85 + Math.random() * 7;
-            const batteryVolt = (hasProblem) ? 10.5 + Math.random() * 1.0 : 13.2 + Math.random() * 1.2;
-            const waterLevel = (hasProblem) ? 5 + Math.random() * 15 : 90 + Math.random() * 10;
-            const fuelLevel = (hasProblem) ? 5 + Math.random() * 10 : 75 + Math.random() * 20;
-            const oilLevel = (hasProblem) ? 10 + Math.random() * 20 : 85 + Math.random() * 12;
+            // Independent randomization for each metric
+            const isTempCritical = Math.random() < 0.10;
+            const isBatteryCritical = Math.random() < 0.15;
+            const isWaterCritical = Math.random() < 0.10;
+            const isFuelCritical = Math.random() < 0.20;
+            const isOilCritical = Math.random() < 0.05;
 
-            const engineStatus = !isVehicleCritical({
+            const engineTemp = (isTempCritical) ? 106 + Math.random() * 5 : 85 + Math.random() * 12;
+            const batteryVolt = (isBatteryCritical) ? 10.5 + Math.random() * 2.0 : 13.2 + Math.random() * 1.2;
+            const waterLevel = (isWaterCritical) ? 5 + Math.random() * 25 : 80 + Math.random() * 20;
+            const fuelLevel = (isFuelCritical) ? 2 + Math.random() * 20 : 60 + Math.random() * 40;
+            const oilLevel = (isOilCritical) ? 5 + Math.random() * 30 : 80 + Math.random() * 18;
+
+            const currentMetrics = {
                 engine_temp: engineTemp,
                 battery_volt: batteryVolt,
                 water_level: waterLevel,
-                oil_level: oilLevel
-            });
+                oil_level: oilLevel,
+                fuel_level: fuelLevel
+            };
+
+            const engineStatus = !isVehicleCritical(currentMetrics);
 
             if (navRef.current && speedRef.current > 0) {
                 odoRef.current += (speedRef.current * 2) / 3600;
@@ -66,7 +75,7 @@ export function useCarStatusSimulator(user, userProfile, isNavigating, currentSp
                 
                 queueUpdate('car_status', user.id, mockStatus);
             }
-        }, 2000);
+        }, 5000);
 
         return () => clearInterval(interval);
     }, [user, userProfile?.role]);

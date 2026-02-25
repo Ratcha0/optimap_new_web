@@ -144,7 +144,6 @@ const TechnicianMap = React.memo(({
     autoSnapPaused,
     viewTarget,
     currentHeading,
-    currentSpeed,
     locationNames,
     setActiveSelection,
     waypoints,
@@ -229,10 +228,19 @@ const TechnicianMap = React.memo(({
                 }
             };
 
+            if (!m.getSource('route-future')) {
+                m.addSource('route-future', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } } });
+                m.addLayer({
+                    id: 'route-line-future', type: 'line', source: 'route-future',
+                    layout: { 'line-join': 'round', 'line-cap': 'round' },
+                    paint: { 'line-color': '#38bdf8', 'line-width': 6, 'line-opacity': 0.4 }
+                });
+            }
+
             if (!m.getSource('route')) {
                 m.addSource('route', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } } });
                 
-                // Add Glow Layer (Bottom)
+               
                 m.addLayer({
                     id: 'route-line-glow', type: 'line', source: 'route',
                     layout: { 'line-join': 'round', 'line-cap': 'round' },
@@ -248,14 +256,6 @@ const TechnicianMap = React.memo(({
                     id: 'route-line', type: 'line', source: 'route',
                     layout: { 'line-join': 'round', 'line-cap': 'round' },
                     paint: { 'line-color': '#2563EB', 'line-width': 6, 'line-opacity': 1.0 }
-                });
-            }
-            if (!m.getSource('route-future')) {
-                m.addSource('route-future', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } } });
-                m.addLayer({
-                    id: 'route-line-future', type: 'line', source: 'route-future',
-                    layout: { 'line-join': 'round', 'line-cap': 'round' },
-                    paint: { 'line-color': '#93c5fd', 'line-width': 6, 'line-opacity': 0.8 }
                 });
             }
 
@@ -333,17 +333,15 @@ const TechnicianMap = React.memo(({
         if (!map.current) return;
         const m = map.current;
         
-        // Use CSS Filters for a 'Cyberpunk' Dark Map that shows intersections
+       
         if (isHudMode) {
             if (m.getLayer('osm-layer')) m.setLayoutProperty('osm-layer', 'visibility', 'visible');
             
-            // Apply filter to the map canvas/container
+            
             const container = m.getContainer();
             container.style.background = '#000';
-            // Filter: Higher contrast and brightness for road network to match overlays
             container.querySelector('canvas').style.filter = 'invert(100%) hue-rotate(180deg) brightness(1.2) contrast(1.8) grayscale(0.1)';
             
-            // Neon path style (stays on top) - GREEN for sunlight visibility
             if (m.getLayer('route-line')) {
                 m.setPaintProperty('route-line', 'line-color', '#39FF14'); 
                 m.setPaintProperty('route-line', 'line-width', 14);
@@ -360,7 +358,7 @@ const TechnicianMap = React.memo(({
             const canvas = container.querySelector('canvas');
             if (canvas) canvas.style.filter = '';
             
-            // Standard path style
+        
             if (m.getLayer('route-line')) {
                 m.setPaintProperty('route-line', 'line-color', '#2563EB');
                 m.setPaintProperty('route-line', 'line-width', 6);
@@ -370,6 +368,11 @@ const TechnicianMap = React.memo(({
                 m.setPaintProperty('route-line-glow', 'line-color', '#2563EB');
                 m.setPaintProperty('route-line-glow', 'line-width', 12);
                 m.setPaintProperty('route-line-glow', 'line-opacity', 0.4);
+            }
+            if (m.getLayer('route-line-future')) {
+                m.setPaintProperty('route-line-future', 'line-color', '#38bdf8');
+                m.setPaintProperty('route-line-future', 'line-width', 6);
+                m.setPaintProperty('route-line-future', 'line-opacity', 0.4);
             }
         }
     }, [isHudMode]);
@@ -384,7 +387,7 @@ const TechnicianMap = React.memo(({
             padding: { bottom: is3D ? 150 : 0 }
         });
 
-        // Sky & Fog (Premium Effect)
+
         if (is3D) {
             if (m.setFog) {
                 m.setFog({
@@ -483,33 +486,37 @@ const TechnicianMap = React.memo(({
             }
 
             const now = Date.now();
-            const sIdx = (isNavigating || currentPointIndex > 0) ? currentPointIndex : 0;
+            const sIdx = isNavigating ? currentPointIndex : 0;
+            const stateKey = `${sIdx}-${routePath.length}`;
             
-          
-            if (lastUpdateStateRef.current.index === sIdx && now - lastUpdateStateRef.current.time < 100) {
+            if (lastUpdateStateRef.current.key === stateKey && now - lastUpdateStateRef.current.time < 100) {
                 return;
             }
 
-            lastUpdateStateRef.current = { index: sIdx, time: now };
+            lastUpdateStateRef.current = { key: stateKey, index: sIdx, time: now };
 
             try {
                 let targetIdx = Math.max(0, Math.min(sIdx, routePath.length - 1));
                 const isFin = !isNavigating && targetIdx >= routePath.length - 1 && routePath.length > 5;
-                const eIdx = (routeLegs && routeLegs[currentLegIndex]) ? routeLegs[currentLegIndex].endIdx : routePath.length - 1;
+                const eIdx = (routeLegs && routeLegs[currentLegIndex]) ? routeLegs[currentLegIndex].endIndex : routePath.length - 1;
        
                 let activeCoords = [];
                 if (!isFin) {
                     if (startPoint && isNavigating && routePath.length > 1) {
                          const currentPos = [startPoint[0], startPoint[1]];
                          let nextPointIdx = targetIdx + 1;
-                         
-                        
                          if (nextPointIdx >= routePath.length) nextPointIdx = routePath.length - 1;
 
                          activeCoords = [currentPos, ...routePath.slice(nextPointIdx, eIdx + 1)];
                     } else {
-                        activeCoords = routePath.slice(targetIdx, eIdx + 1);
+                        activeCoords = routePath.slice(Math.max(0, targetIdx), eIdx + 1);
                     }
+                }
+
+          
+                if (isNavigating && activeCoords.length < 3 && !isFin && targetIdx < eIdx - 5) {
+        
+                    activeCoords = [startPoint, ...routePath.slice(Math.max(0, targetIdx), eIdx + 1)];
                 }
 
                 const future = isFin ? [] : routePath.slice(eIdx);
@@ -600,7 +607,7 @@ const TechnicianMap = React.memo(({
             if (!markersRef.current.techs[tech.id]) {
                 const el = document.createElement('div');
                 el.className = 'tech-marker cursor-pointer';
-                // Higher z-index for primary techs
+            
                 el.style.zIndex = isPrimary ? '450' : '440';
 
                 const firstName = tech.full_name?.split(' ')[0] || 'ช่าง';

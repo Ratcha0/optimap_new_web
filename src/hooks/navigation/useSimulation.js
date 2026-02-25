@@ -18,6 +18,7 @@ export const useSimulation = ({
     isWaitingRef
 }) => {
     const simIntervalRef = useRef(null);
+    const lastStatePointRef = useRef([0, 0]);
 
     const stopSimulation = useCallback(() => {
         if (simIntervalRef.current) {
@@ -43,11 +44,11 @@ export const useSimulation = ({
         const initialBearing = calculateBearing(startPos[0], startPos[1], secondPos[0], secondPos[1]);
         
         setStartPoint(startPos);
+        lastStatePointRef.current = startPos;
         setCurrentHeading(initialBearing);
         
-        // Immediate jump
         setTimeout(() => {
-            if (mapInstance && mapInstance.isMapLibre) {
+            if (mapInstance?.isMapLibre) {
                 mapInstance.jumpTo({
                     center: [startPos[1], startPos[0]],
                     zoom: 19,
@@ -55,19 +56,20 @@ export const useSimulation = ({
                     bearing: initialBearing
                 });
             }
-            syncMap(startPos[0], startPos[1], initialBearing, true, SPEED_MPS);
+            syncMap(startPos[0], startPos[1], initialBearing, true, SPEED_KMH);
         }, 50);
 
         const distances = [0];
         let totalDistance = 0;
         for (let i = 0; i < routePath.length - 1; i++) {
-            const d = calculateDistance(routePath[i][0], routePath[i][1], routePath[i+1][0], routePath[i+1][1]);
-            totalDistance += d;
+            totalDistance += calculateDistance(routePath[i][0], routePath[i][1], routePath[i+1][0], routePath[i+1][1]);
             distances.push(totalDistance);
         }
 
         stopSimulation();
         
+        let lastUpdateTime = 0;
+
         const updateSimulation = (timestamp) => {
             if (!startTime) {
                 startTime = timestamp;
@@ -75,8 +77,7 @@ export const useSimulation = ({
             }
 
             if (isWaitingRef.current) {
-                const dt = timestamp - lastFrameTime;
-                startTime += dt;
+                startTime += (timestamp - lastFrameTime);
                 lastFrameTime = timestamp;
                 simIntervalRef.current = requestAnimationFrame(updateSimulation);
                 return;
@@ -84,7 +85,7 @@ export const useSimulation = ({
             
             lastFrameTime = timestamp;
             const elapsedSeconds = (timestamp - startTime) / 1000;
-            let distanceCovered = elapsedSeconds * SPEED_MPS;
+            const distanceCovered = elapsedSeconds * SPEED_MPS;
 
             if (distanceCovered >= totalDistance) {
                 const endPos = routePath[routePath.length - 1];
@@ -95,27 +96,30 @@ export const useSimulation = ({
             }
 
             let idx = 0;
-            while (idx < distances.length - 2 && distances[idx + 1] <= distanceCovered) {
-                idx++;
-            }
-
-            const segmentDist = distances[idx + 1] - distances[idx];
-            const distInSegment = distanceCovered - distances[idx];
-            const ratio = segmentDist > 0 ? Math.max(0, Math.min(1, distInSegment / segmentDist)) : 0;
+            while (idx < distances.length - 2 && distances[idx + 1] <= distanceCovered) idx++;
 
             const p1 = routePath[idx];
             const p2 = routePath[idx + 1];
+            const segmentDist = distances[idx + 1] - distances[idx];
+            const ratio = segmentDist > 0 ? Math.max(0, Math.min(1, (distanceCovered - distances[idx]) / segmentDist)) : 0;
 
             const curLat = p1[0] + (p2[0] - p1[0]) * ratio;
             const curLng = p1[1] + (p2[1] - p1[1]) * ratio;
+            const head = calculateBearing(p1[0], p1[1], p2[0], p2[1]);
             
-            let head = calculateBearing(p1[0], p1[1], p2[0], p2[1]);
-            
-            setStartPoint([curLat, curLng]);
-            setCurrentHeading(head);
-            setCurrentSpeed(SPEED_MPS); 
+            const now = Date.now();
+            if (now - lastUpdateTime > 60) {
+                const movedDist = calculateDistance(curLat, curLng, lastStatePointRef.current[0], lastStatePointRef.current[1]);
+                if (movedDist > 2) {
+                    setStartPoint([curLat, curLng]);
+                    lastStatePointRef.current = [curLat, curLng];
+                    setCurrentHeading(head);
+                    setCurrentSpeed(SPEED_KMH); 
+                    lastUpdateTime = now;
+                }
+            }
 
-            syncMap(curLat, curLng, head, false, SPEED_MPS);
+            syncMap(curLat, curLng, head, false, SPEED_KMH);
             checkLegProgress(curLat, curLng, SPEED_KMH);
             
             if (idx !== simIndexRef.current) {

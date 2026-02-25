@@ -56,7 +56,7 @@ export default function HUDOverlay({
                 {/* Speed on the left - High Lum White */}
                 <div className="text-left bg-black/30 px-6 py-2 rounded-[2rem] border border-white/10">
                     <div className="text-6xl sm:text-[9rem] font-black text-white leading-none drop-shadow-[0_0_20px_rgba(255,255,255,0.4)]">
-                        {Math.round(currentSpeed * 3.6)}
+                        {Math.round(currentSpeed)}
                     </div>
                 </div>
 

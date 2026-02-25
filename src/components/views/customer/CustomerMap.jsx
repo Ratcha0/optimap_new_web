@@ -6,11 +6,10 @@ import { EXTERNAL_LINKS } from '../../../constants/api';
 import technicialcar from '../../../assets/technicialcar.png';
 import { createRoot } from 'react-dom/client';
 import VehicleStatusDashboard from '../../ui/VehicleStatusDashboard';
-import { getEngineStatusDisplay } from '../../../utils/statusUtils';
+
 
 const TechnicianPopupContent = ({ tech }) => {
     const carStatusData = Array.isArray(tech.car_status) ? tech.car_status[0] : tech.car_status;
-    const statusDisplay = carStatusData ? getEngineStatusDisplay(carStatusData) : null;
 
     return (
         <div className="p-1 flex flex-col gap-3 min-w-[280px] font-kanit">
@@ -82,7 +81,7 @@ const CustomerMap = ({
     });
     const routeSourceRef = useRef(false);
 
-    // Helper: Convert [Lat, Lng] to [Lng, Lat]
+   
     const toLngLat = (coords) => {
         if (!coords) return null;
         if (Array.isArray(coords)) return [coords[1], coords[0]];
@@ -90,7 +89,7 @@ const CustomerMap = ({
         return null;
     };
 
-    // Helper: Create custom marker element
+    
     const createMarkerElement = (html, className) => {
         const el = document.createElement('div');
         el.className = className;
@@ -98,7 +97,14 @@ const CustomerMap = ({
         return el;
     };
 
-    // Initialize Map
+    const activeSelectionRef = useRef(activeSelection);
+    const handleLocationSelectRef = useRef(handleLocationSelect);
+    const onMapInteractRef = useRef(onMapInteract);
+
+    useEffect(() => { activeSelectionRef.current = activeSelection; }, [activeSelection]);
+    useEffect(() => { handleLocationSelectRef.current = handleLocationSelect; }, [handleLocationSelect]);
+    useEffect(() => { onMapInteractRef.current = onMapInteract; }, [onMapInteract]);
+
     useEffect(() => {
         if (!mapContainer.current) return;
 
@@ -123,12 +129,12 @@ const CustomerMap = ({
         });
 
         map.current.on('load', () => {
-            // Provide a shim for Leaflet-style methods in mapInstance
+          
             const shimmap = map.current;
             shimmap.setView = (center, zoom) => {
                 shimmap.flyTo({ center: toLngLat(center), zoom: zoom });
             };
-            // Leaflet flyTo(center, zoom, options) -> MapLibre flyTo({center, zoom, ...})
+            
             const originalFlyTo = shimmap.flyTo.bind(shimmap);
             shimmap.flyTo = (center, zoom, options) => {
                 if (Array.isArray(center)) {
@@ -169,14 +175,17 @@ const CustomerMap = ({
             if (!e.lngLat) return;
 
             const latlng = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+            const selection = activeSelectionRef.current;
             
-            if (activeSelection) {
-                const type = typeof activeSelection === 'object' ? activeSelection.type : activeSelection;
-                handleLocationSelect(type, [latlng.lat, latlng.lng]);
+            if (selection) {
+                const type = typeof selection === 'object' ? selection.type : selection;
+                if (handleLocationSelectRef.current) {
+                    handleLocationSelectRef.current(type, [latlng.lat, latlng.lng]);
+                }
             }
         });
 
-        const onInteraction = () => onMapInteract?.();
+        const onInteraction = () => onMapInteractRef.current?.();
         map.current.on('dragstart', onInteraction);
         map.current.on('zoomstart', onInteraction);
         map.current.on('rotatestart', onInteraction);
@@ -187,9 +196,9 @@ const CustomerMap = ({
                 map.current = null;
             }
         };
-    }, [activeSelection]);
+    }, []);
 
-    // Customer Position (User Marker)
+   
     useEffect(() => {
         if (!map.current || !myPosition) return;
 
@@ -199,9 +208,9 @@ const CustomerMap = ({
             const el = document.createElement('div');
             el.className = 'customer-marker';
             el.innerHTML = `
-                <div class="relative w-[50px] h-[50px] flex items-center justify-center">
-                    <div class="absolute w-full h-full rounded-full bg-blue-500 opacity-20 animate-ping"></div>
-                    <div class="w-4 h-4 rounded-full border-2 border-white shadow-lg bg-blue-500 z-10"></div>
+                <div class="relative w-[60px] h-[60px] flex items-center justify-center">
+                    <div class="absolute w-12 h-12 rounded-full bg-blue-500 opacity-20 animate-ping"></div>
+                    <div class="w-5 h-5 rounded-full border-2 border-white shadow-lg bg-blue-500 z-10"></div>
                 </div>
             `;
             markersRef.current.user = new maplibregl.Marker({ element: el })
@@ -219,7 +228,7 @@ const CustomerMap = ({
         }
     }, [myPosition, autoSnapPaused]);
 
-    // Technician Locations
+   
     useEffect(() => {
         if (!map.current) return;
         
@@ -272,7 +281,7 @@ const CustomerMap = ({
                 const e = markersRef.current.techs[tech.id];
                 e.marker.setLngLat(pos);
                 
-                // Update popup if open
+               
                 if (e.marker.getPopup().isOpen() && e.techData !== JSON.stringify(tech)) {
                     e.root.render(<TechnicianPopupContent tech={tech} />);
                     e.techData = JSON.stringify(tech);
@@ -281,7 +290,7 @@ const CustomerMap = ({
         });
     }, [techLocations]);
 
-    // Branch Markers
+    
     useEffect(() => {
         if (!map.current) return;
         
@@ -330,7 +339,7 @@ const CustomerMap = ({
         };
     }, []);
 
-    // Home Marker
+   
     useEffect(() => {
         if (!map.current || !userProfile?.home_lat || !userProfile?.home_lng || activeSelection?.type === 'home-picking') {
             if (markersRef.current.home) {
@@ -402,7 +411,7 @@ const CustomerMap = ({
         };
     }, [userProfile, activeSelection]);
 
-    // Home Picking Marker
+    
     useEffect(() => {
         if (!map.current) return;
         
@@ -424,7 +433,7 @@ const CustomerMap = ({
         }
     }, [activeSelection]);
 
-    // Route Drawing
+  
     useEffect(() => {
         if (!map.current || !routeSourceRef.current) return;
         
@@ -440,7 +449,7 @@ const CustomerMap = ({
         map.current.getSource('route').setData(geojson);
     }, [routePath]);
 
-    // Waypoints
+    
     useEffect(() => {
         if (!map.current) return;
         
@@ -484,7 +493,7 @@ const CustomerMap = ({
         window.handleWaypointRemove = (idx) => setWaypoints(prev => prev.filter((_, i) => i !== idx));
     }, [waypoints, locationNames]);
 
-    // Route Fitter logic
+
     useEffect(() => {
         if (!map.current || routePath.length === 0 || autoSnapPaused) return;
         

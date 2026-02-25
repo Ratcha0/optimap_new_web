@@ -1,6 +1,3 @@
-export const MAP_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-export const MAP_TILE_URL_SECONDARY = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-
 export const SEARCH_API = {
     PHOTON: 'https://photon.komoot.io/api/',
     NOMINATIM: 'https://nominatim.openstreetmap.org',
@@ -9,10 +6,8 @@ export const SEARCH_API = {
 };
 
 export const ROUTING_API = {
-    OSRM_GENERIC: 'https://router.project-osrm.org',
     OSM_CAR: 'https://routing.openstreetmap.de/routed-car',
-    OSM_BIKE: 'https://routing.openstreetmap.de/routed-bike',
-    OSM_FOOT: 'https://routing.openstreetmap.de/routed-foot'
+    OSRM_PRO: 'https://router.project-osrm.org'
 };
 
 export const EXTERNAL_LINKS = {

@@ -53,7 +53,7 @@ export function useCarStatusSimulator(user, userProfile, isNavigating, currentSp
                 water_level: waterLevel,
                 fuel_level: fuelLevel,
                 oil_level: oilLevel,
-                vehicle_speed: speedRef.current ? speedRef.current * 3.6 : 0,
+                vehicle_speed: speedRef.current ? speedRef.current : 0,
                 odometer: Math.floor(odoRef.current),
                 engine_status: engineStatus,
                 eta: navExtraRef.current?.eta || null,

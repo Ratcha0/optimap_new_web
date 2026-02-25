@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 
 export const useMapSync = (mapInstance, is3D, isAutoSnapPaused) => {
     const pendingUpdateRef = useRef(null);
@@ -17,7 +17,7 @@ export const useMapSync = (mapInstance, is3D, isAutoSnapPaused) => {
         isAutoSnapPausedRef.current = isAutoSnapPaused;
     }, [isAutoSnapPaused]);
 
-    const performMapUpdate = (lat, lng, heading, force, distToManeuver = Infinity) => {
+    const performMapUpdate = useCallback((lat, lng, heading, force, distToManeuver = Infinity) => {
         if (!mapInstance || !mapInstance.getContainer()) return;
         
         try {
@@ -25,36 +25,42 @@ export const useMapSync = (mapInstance, is3D, isAutoSnapPaused) => {
             if (currentZoom === undefined) return;
 
             const speed = lastKnownSpeedRef.current || 0;
-            let idealZoom = 19;
             
-            if (speed > 22.2) idealZoom = 17.2;
-            else if (speed > 13.8) idealZoom = 17.8;
-            else if (speed > 8.3) idealZoom = 18.3;
-            else if (speed > 1.3) idealZoom = 18.8;
+            let targetZoom = 19;
+            if (speed > 110) targetZoom = 15.0;
+            else if (speed > 90) targetZoom = 16.0;
+            else if (speed > 70) targetZoom = 17.0;
+            else if (speed > 50) targetZoom = 17.8;
+            else if (speed > 30) targetZoom = 18.5;
+            else if (speed > 10) targetZoom = 19.0;
 
-            if (distToManeuver < 50) {
-                idealZoom = 19.5; 
-            } else if (distToManeuver < 150) {
-                idealZoom = Math.max(idealZoom, 18.8);
+            if (distToManeuver < 40) {
+                targetZoom = Math.min(20, targetZoom + 1.2); 
+            } else if (distToManeuver < 100) {
+                targetZoom = Math.min(19.5, targetZoom + 0.6);
             }
             
-            const targetZoom = force ? idealZoom : (currentZoom * 0.9 + idealZoom * 0.1); 
+            const smoothedZoom = force ? targetZoom : (currentZoom * 0.9 + targetZoom * 0.1); 
 
             const shouldUse3D = is3DRef.current;
             
-            let idealPitch = shouldUse3D ? 60 : 0;
-            if (shouldUse3D && speed > 16.6) { // > 60 km/h
-                idealPitch = 45; 
+            let targetPitch = shouldUse3D ? 65 : 0;
+            if (shouldUse3D) {
+                if (speed > 90) targetPitch = 35;
+                else if (speed > 60) targetPitch = 45;
+                else if (speed > 30) targetPitch = 55;
+                
+                if (distToManeuver < 60) targetPitch = 70;
             }
 
-            const offsetY = shouldUse3D ? window.innerHeight * 0.25 : window.innerHeight * 0.2; 
+            const offsetY = shouldUse3D ? window.innerHeight * 0.22 : window.innerHeight * 0.15; 
             const centerOffset = [0, offsetY];
 
             const commonOptions = {
                 center: mapInstance.isMapLibre ? [lng, lat] : [lat, lng],
-                zoom: targetZoom,
+                zoom: smoothedZoom,
                 bearing: heading !== undefined ? (mapInstance.isMapLibre ? heading : (360 - heading)) : undefined,
-                pitch: idealPitch,
+                pitch: targetPitch,
                 padding: { top: 0, bottom: 0, left: 0, right: 0 }, 
                 offset: centerOffset
             };
@@ -67,33 +73,31 @@ export const useMapSync = (mapInstance, is3D, isAutoSnapPaused) => {
                     essential: true
                 });
             } else {
-                // Adaptive duration: Longer for regular GPS updates to create 'continuous' feel
-                const isHighFreq = speed > 1; // Basic detection
-                const smoothDuration = isHighFreq ? 950 : 50; 
+                const isHighFreq = speed > 2; 
+                const smoothDuration = isHighFreq ? 1200 : 300; 
                 
                 mapInstance.easeTo({
                     ...commonOptions,
                     duration: smoothDuration,
-                    easing: (t) => t // Linear for path following
+                    easing: (t) => t 
                 });
             }
 
         } catch (error) {
-             if (error.message && error.message.includes('_leaflet_pos')) return;
              console.error("syncMap error:", error);
         }
-    };
+    }, [mapInstance]);
 
-    const processMapUpdate = () => {
+    const processMapUpdate = useCallback(() => {
         if (pendingUpdateRef.current) {
             const { lat, lng, heading, force, distToManeuver } = pendingUpdateRef.current;
             performMapUpdate(lat, lng, heading, force, distToManeuver);
             pendingUpdateRef.current = null;
         }
         rafIdRef.current = null;
-    };
+    }, [performMapUpdate]);
 
-    const syncMap = (lat, lng, heading, force = false, currentSpeed = null, distToManeuver = Infinity) => {
+    const syncMap = useCallback((lat, lng, heading, force = false, currentSpeed = null, distToManeuver = Infinity) => {
         if (!mapInstance) return;
         if (!force && isAutoSnapPausedRef.current) return;
         
@@ -124,7 +128,7 @@ export const useMapSync = (mapInstance, is3D, isAutoSnapPaused) => {
         }
         
         performMapUpdate(lat, lng, heading, force, distToManeuver);
-    };
+    }, [mapInstance, performMapUpdate, processMapUpdate]);
 
     return { syncMap };
 };

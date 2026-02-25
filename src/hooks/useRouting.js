@@ -1,155 +1,141 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { calculateDistance } from '../utils/geoUtils';
-import { formatTime, translateInstruction } from '../utils/mapUtils';
-import { ROUTING_API } from '../constants/api';
 import { prefetchRouteTiles } from '../utils/prefetchUtils';
-import { logger } from '../utils/logger';
+import { formatTime, translateInstruction } from '../utils/mapUtils';
+
+const PRIMARY_OSRM = 'https://router.project-osrm.org';
+const SECONDARY_OSRM = 'https://routing.openstreetmap.de/routed-car';
 
 export const useRouting = ({
     startPoint,
     waypoints,
     locationNames,
-    travelMode,
     tripType,
     isNavigating,
     rerouteTrigger,
-    setRerouteTrigger,
     completedWaypoints,
     originalStart,
     currentLegIndex,
-    isOnline = true
+    setRerouteTrigger,
+    isOnline
 }) => {
-    const [routeLegs, setRouteLegs] = useState([]);
     const [routePath, setRoutePath] = useState([]);
+    const [routeLegs, setRouteLegs] = useState([]);
     const [segments, setSegments] = useState([]);
-    const [distance, setDistance] = useState(null);
-    const [totalDuration, setTotalDuration] = useState(null);
+    const [distance, setDistance] = useState(0);
+    const [totalDuration, setTotalDuration] = useState(0);
     const [navigationSteps, setNavigationSteps] = useState([]);
     const [visitOrder, setVisitOrder] = useState({});
     const [legTargetIndices, setLegTargetIndices] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
+
+    const lastFetchTimeRef = useRef(0);
     const lastWaypointsRef = useRef("");
     const lastRoutedPos = useRef(null);
+    const debounceTimerRef = useRef(null);
+    const routingCache = useRef({});
+
     const clearRoute = useCallback(() => {
         setRouteLegs([]);
         setRoutePath([]);
         setSegments([]);
-        setDistance(null);
-        setTotalDuration(null);
+        setDistance(0);
+        setTotalDuration(0);
         setNavigationSteps([]);
         setVisitOrder({});
         setLegTargetIndices([]);
-        lastWaypointsRef.current = "";
         lastRoutedPos.current = null;
-        setError(null);
     }, []);
 
+
+
     useEffect(() => {
-        const validWps = waypoints.filter(wp => wp !== null);
+        const validWpsWithIndexes = waypoints
+            .map((wp, i) => ({ coords: wp, origIdx: i }))
+            .filter(item => item.coords !== null);
 
-
-        if (!startPoint || validWps.length === 0) {
+        if (!startPoint || validWpsWithIndexes.length === 0) {
             if (routePath.length > 0) clearRoute();
             lastWaypointsRef.current = "";
             return;
         }
 
-        const waypointsStr = JSON.stringify(validWps) + `-${tripType}-${travelMode}`;
+        const waypointsStr = JSON.stringify(waypoints) + `-${tripType}-${isNavigating}-${rerouteTrigger}-${currentLegIndex}`;
         const waypointsChanged = waypointsStr !== lastWaypointsRef.current;
 
         if (!waypointsChanged && lastRoutedPos.current && !error && routePath.length > 0) {
             if (isNavigating && rerouteTrigger === 0) return;
             const dist = calculateDistance(startPoint[0], startPoint[1], lastRoutedPos.current[0], lastRoutedPos.current[1]);
-            if (!isNavigating && dist < 30) return;
-        }
-
-        if (!isOnline && routePath.length === 0) {
-            setError("ออฟไลน์: ไม่สามารถคำนวณเส้นทางได้");
-            return;
+            if (!isNavigating && dist < 25) return;
         }
 
         lastWaypointsRef.current = waypointsStr;
-        let wpsWithIndex = waypoints
-            .map((wp, i) => ({ coords: wp, originalIndex: i }))
-            .filter(w => w.coords !== null);
-        
+
+        let activeWps = [...validWpsWithIndexes];
         if (isNavigating) {
-            wpsWithIndex = wpsWithIndex.filter(w => !completedWaypoints.has(w.originalIndex));
+            activeWps = activeWps.filter(w => !completedWaypoints.has(w.origIdx));
         }
 
-        const sortedWps = wpsWithIndex.map(w => w.coords);
-        let coords = [startPoint, ...sortedWps];
-        let indices = [-1, ...wpsWithIndex.map(w => w.originalIndex)];
+        const coordsForApi = [startPoint, ...activeWps.map(w => w.coords)];
+        const inputIndicesMap = [-1, ...activeWps.map(w => w.origIdx)];
 
+       
         if (tripType === 'roundtrip') {
-            if (isNavigating && originalStart) {
-                coords.push(originalStart);
-                indices.push(-2);
-            } else if (!isNavigating) {
-               
-                coords.push(startPoint);
-                indices.push(-2);
-            }
+            const origin = originalStart || startPoint;
+            coordsForApi.push(origin);
+            inputIndicesMap.push(-2);
         }
 
-        if (coords.length < 2) {
+        if (coordsForApi.length < 2) {
             if (routePath.length > 0) clearRoute();
             return;
         }
 
-        const inputIndicesMap = indices;
-        const coordStr = coords.map(p => `${p[1]},${p[0]}`).join(';');
-        const apiMode = travelMode === 'motorbike' ? 'driving' : travelMode;
-        let baseUrl = ROUTING_API.OSRM_GENERIC;
-        if (apiMode === 'driving') baseUrl = ROUTING_API.OSM_CAR;
-        if (apiMode === 'bike') baseUrl = ROUTING_API.OSM_BIKE;
-        if (apiMode === 'foot') baseUrl = ROUTING_API.OSM_FOOT;
-
-        
-        let service = 'route';
-        const options = `steps=true&geometries=geojson&overview=full`;
-
-        const fetchRoute = async (url) => {
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            if (data.code !== 'Ok') throw new Error(data.code);
-            return data;
-        };
-
-        const primaryUrl = `${baseUrl}/${service}/v1/driving/${coordStr}?${options}`;
-        const fallbackUrl = `${ROUTING_API.OSRM_GENERIC}/${service}/v1/driving/${coordStr}?${options}`;
-
-        setIsLoading(true);
-        setError(null);
+        const coordStr = coordsForApi.map(p => `${p[1]},${p[0]}`).join(';');
+        const isOptimized = true; 
+        const apiPath = 'trip';
+        const cacheKey = coordStr + `-${apiPath}-` + (isNavigating ? 'nav' : 'pre');
 
         const processData = (data) => {
-            if (!data || (!data.trips && !data.routes)) {
-                throw new Error("Invalid route data format");
-            }
             lastRoutedPos.current = startPoint;
-            let legs, sortedOriginalIndices, totalDistance = 0, totalSecs = 0;
-            const adjustTime = (sec) => travelMode === 'motorbike' ? sec * 0.7 : sec;
 
-            if (data.routes) {
-                const route = data.routes[0];
-                legs = route.legs; totalDistance = route.distance; totalSecs = adjustTime(route.duration);
-                sortedOriginalIndices = [...inputIndicesMap];
-            } else if (data.trips) {
-               
-                const trip = data.trips[0];
-                legs = trip.legs; totalDistance = trip.distance; totalSecs = adjustTime(trip.duration);
-                sortedOriginalIndices = data.waypoints.map(wp => inputIndicesMap[wp.waypoint_index]);
-                if (tripType === 'roundtrip') sortedOriginalIndices.push(-2);
-            }
-
+            const route = isOptimized ? data.trips[0] : data.routes[0];
+            const legs = route.legs;
+            const waypointsMeta = isOptimized ? data.waypoints : null;
+            
             if (legs) {
                 const newOrder = {};
-                sortedOriginalIndices.forEach((origIdx, seq) => { if (origIdx >= 0) newOrder[origIdx] = seq; });
-                setVisitOrder(newOrder);
+                const absoluteTargetIndices = [];
 
-                const newLegs = []; const legInfos = []; const allCoords = []; const allSteps = [];
+                if (isOptimized && waypointsMeta) {
+                   
+                    waypointsMeta.sort((a, b) => a.trips_index - b.trips_index);
+                    waypointsMeta.forEach((wpMeta, seq) => {
+                        const inputIdx = wpMeta.waypoint_index;
+                        const originalId = inputIndicesMap[inputIdx];
+                        if (originalId >= 0) newOrder[originalId] = seq;
+                        
+                        if (seq > 0) absoluteTargetIndices.push(originalId);
+                    });
+                    
+                   
+                    while (absoluteTargetIndices.length < legs.length) {
+                         absoluteTargetIndices.push(absoluteTargetIndices[absoluteTargetIndices.length-1]);
+                    }
+                } else {
+                    inputIndicesMap.forEach((origIdx, seq) => { 
+                        if (origIdx >= 0) newOrder[origIdx] = seq; 
+                        if (seq > 0) absoluteTargetIndices.push(origIdx);
+                    });
+                }
+                
+                setVisitOrder(newOrder);
+                setLegTargetIndices(absoluteTargetIndices);
+
+                const newLegs = []; const allCoords = []; const allSteps = [];
+                const legInfos = [];
+
                 legs.forEach((leg, i) => {
                     const legStartIdx = allCoords.length;
                     if (leg.steps) {
@@ -157,75 +143,121 @@ export const useRouting = ({
                             if (step.geometry?.coordinates) {
                                 const sIdx = allCoords.length;
                                 const stepCoords = step.geometry.coordinates.map(c => [c[1], c[0]]);
-                                allCoords.push(...stepCoords);
-                                allSteps.push({
-                                    ...step,
-                                    startIndex: sIdx,
-                                    endIndex: allCoords.length - 1,
-                                    instruction: translateInstruction(step)
+                                stepCoords.forEach(coord => {
+                                    if (allCoords.length === 0 || coord[0] !== allCoords[allCoords.length-1][0] || coord[1] !== allCoords[allCoords.length-1][1]) {
+                                        allCoords.push(coord);
+                                    }
                                 });
+                                allSteps.push({ ...step, startIndex: sIdx, endIndex: allCoords.length - 1, instruction: translateInstruction(step) });
                             }
                         });
                     }
-                    const fromIdx = sortedOriginalIndices[i];
-                    const toIdx = sortedOriginalIndices[i + 1];
-                    const getName = (idx) => {
-                        if (idx === -1) return locationNames['start'] || "จุดเริ่มต้น";
-                        if (idx === -2) return "จุดเริ่มต้น (ขากลับ)";
-                        return locationNames[`waypoint-${idx}`] || `ปลายทางที่ ${idx + 1}`;
-                    };
+                    
+                   
+                    let fromName = "จุดเริ่มต้น";
+                    let toName = "ปลายทาง";
+                    
+                    if (isOptimized && waypointsMeta) {
+                        const startMeta = waypointsMeta[i];
+                        const endMeta = waypointsMeta[i+1];
+                        const getOptimizedName = (meta) => {
+                            if (!meta) return "ปลายทาง";
+                            const idx = inputIndicesMap[meta.waypoint_index];
+                            if (idx === -1) return locationNames['start'] || "จุดเริ่มต้น";
+                            if (idx === -2) return "กลับสู่จุดเริ่มต้น";
+                            return locationNames[`waypoint-${idx}`] || `จุดหมายที่ ${idx + 1}`;
+                        };
+                        fromName = getOptimizedName(startMeta);
+                        toName = endMeta ? getOptimizedName(endMeta) : (isNavigating ? "จุดหมาย" : "ปลายทาง");
+                    } else {
+                        const fromIdx = inputIndicesMap[i];
+                        const toIdx = inputIndicesMap[i + 1] !== undefined ? inputIndicesMap[i + 1] : -99;
+                        const getName = (idx) => {
+                            if (idx === -1) return locationNames['start'] || "จุดเริ่มต้น";
+                            if (idx === -2) return "กลับสู่จุดเริ่มต้น";
+                            if (idx === -99) return "ปลายทาง";
+                            return locationNames[`waypoint-${idx}`] || `จุดหมายที่ ${idx + 1}`;
+                        };
+                        fromName = getName(fromIdx);
+                        toName = getName(toIdx);
+                    }
+
                     legInfos.push({
-                        from: getName(fromIdx),
-                        to: getName(toIdx),
+                        from: fromName,
+                        to: toName,
                         dist: (leg.distance / 1000).toFixed(2),
-                        time: formatTime(adjustTime(leg.duration || 0)),
+                        time: Math.round(leg.duration / 60) + " นาที",
                         isPassed: isNavigating && i < currentLegIndex,
                         isCurrent: isNavigating && i === currentLegIndex
                     });
-                    newLegs.push({ coords: allCoords.slice(legStartIdx), startIdx: legStartIdx, endIdx: allCoords.length - 1 });
+                    newLegs.push({ coords: allCoords.slice(legStartIdx), startIdx: legStartIdx, endIndex: allCoords.length - 1 });
                 });
 
                 setRouteLegs(newLegs);
                 setRoutePath(allCoords);
                 prefetchRouteTiles(allCoords);
                 setSegments(legInfos);
-                setDistance((totalDistance / 1000).toFixed(2));
-                setTotalDuration(formatTime(totalSecs));
+                setDistance((route.distance / 1000).toFixed(2));
+                setTotalDuration(formatTime(route.duration));
                 setNavigationSteps(allSteps);
-                setLegTargetIndices(legs.map((_, i) => sortedOriginalIndices[i + 1]));
+                
                 if (setRerouteTrigger) setRerouteTrigger(0);
             }
         };
 
-        fetchRoute(primaryUrl)
-            .then(processData)
-            .catch((err) => {
-                logger.warn("Primary routing failed", { url: primaryUrl, error: err.message });
-                fetchRoute(fallbackUrl)
-                    .then(processData)
-                    .catch((err) => {
-                        logger.error(err, { context: "Route fetch failed", url: fallbackUrl });
-                        setError(err.message);
-                        setIsLoading(false);
-                    });
+        if (routingCache.current[cacheKey] && !rerouteTrigger && Date.now() - routingCache.current[cacheKey].time < 30000) {
+            processData(routingCache.current[cacheKey].data);
+            return;
+        }
+
+        const performFetch = async () => {
+            const now = Date.now();
+            if (now - lastFetchTimeRef.current < 600) return;
+            lastFetchTimeRef.current = now;
+            setIsLoading(true);
+            setError(null);
+
+            const isRound = tripType === 'roundtrip';
+            const options = `steps=true&geometries=geojson&overview=full&source=first&destination=${isRound ? 'last' : 'any'}&roundtrip=false`;
+            const abortController = new AbortController();
+            const timeoutId = setTimeout(() => abortController.abort(), 15000);
+            
+            const fetchRoute = async (host) => {
+                const url = `${host}/${apiPath}/v1/driving/${coordStr}?${options}`;
+                const res = await fetch(url, { signal: abortController.signal });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (data.code !== 'Ok') throw new Error(data.code);
+                return data;
+            };
+
+            Promise.any([
+                fetchRoute(SECONDARY_OSRM),
+                fetchRoute(PRIMARY_OSRM)
+            ])
+            .then(data => {
+                clearTimeout(timeoutId);
+                abortController.abort();
+                routingCache.current[cacheKey] = { data, time: Date.now() };
+                processData(data);
+            })
+            .catch(err => {
+                if (err.name === 'AbortError') return;
+                console.error("Routing error:", err);
+                setError("เซิร์ฟเวอร์คำนวณเส้นทางขัดข้อง โปรดลองใหม่");
             })
             .finally(() => {
-                if (service !== 'trip') setIsLoading(false);
+                clearTimeout(timeoutId);
+                setIsLoading(false);
             });
-    }, [startPoint, waypoints, locationNames, travelMode, tripType, isNavigating, rerouteTrigger, completedWaypoints, originalStart, currentLegIndex, setRerouteTrigger, clearRoute, routePath.length, isOnline]);
+        };
 
+        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+        if (isOnline) {
+            debounceTimerRef.current = setTimeout(performFetch, 500);
+        }
+        return () => clearTimeout(debounceTimerRef.current);
+    }, [startPoint, waypoints, locationNames, tripType, isNavigating, rerouteTrigger, completedWaypoints, originalStart, currentLegIndex, setRerouteTrigger, clearRoute, isOnline]);
 
-    return {
-        routeLegs,
-        routePath,
-        segments,
-        distance,
-        totalDuration,
-        navigationSteps,
-        visitOrder,
-        legTargetIndices,
-        clearRoute,
-        isLoading,
-        error
-    };
+    return { routeLegs, routePath, segments, distance, totalDuration, navigationSteps, visitOrder, legTargetIndices, clearRoute, isLoading, error };
 };

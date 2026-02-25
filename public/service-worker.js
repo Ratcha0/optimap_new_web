@@ -38,6 +38,16 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
+    if (
+        url.hostname.includes('router.project-osrm.org') ||
+        url.hostname.includes('routing.openstreetmap.de') ||
+        url.hostname.includes('photon.komoot.io') ||
+        url.hostname.includes('nominatim.openstreetmap.org') ||
+        url.hostname.includes('api.maptiler.com')
+    ) {
+        return;
+    }
+
     if (TILE_URLS.some(domain => url.hostname.includes(domain))) {
         event.respondWith(
             caches.open(TILE_CACHE).then((cache) => {
@@ -75,16 +85,28 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // For development, bypass cache for HMR and source files
+   
     const urlStr = url.toString();
-    if (urlStr.includes('localhost') || urlStr.includes('@vite') || urlStr.includes('@react-refresh') || urlStr.includes('node_modules') || url.port === '3000') {
-         // Network only for dev server stuff
+    if (
+        urlStr.includes('localhost') || 
+        urlStr.includes('ngrok') ||
+        urlStr.includes('@vite') || 
+        urlStr.includes('@react-refresh') || 
+        urlStr.includes('node_modules') || 
+        url.port === '3000'
+    ) {
          return; 
     }
 
     event.respondWith(
         caches.match(event.request).then((response) => {
-            return response || fetch(event.request);
+            return response || fetch(event.request).catch((err) => {
+       
+                if (event.request.mode === 'navigate') {
+                    return caches.match('/');
+                }
+                throw err;
+            });
         })
     );
 });
@@ -96,12 +118,14 @@ self.addEventListener('message', (event) => {
             urls.forEach(url => {
                 cache.match(url).then(response => {
                     if (!response) {
-                        fetch(url).then(res => {
+                        fetch(url, { priority: 'low' }).then(res => {
                             if (res.status === 200) cache.put(url, res);
-                        }).catch(() => {});
+                        }).catch(() => {
+                            // Suppress prefetch errors
+                        });
                     }
-                });
+                }).catch(() => {});
             });
-        });
+        }).catch(() => {});
     }
 });

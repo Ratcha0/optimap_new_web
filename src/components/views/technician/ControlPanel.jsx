@@ -2,7 +2,6 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { formatTime } from '../../../utils/mapUtils';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../ui/ToastNotification';
-import { NAVIGATION_MODES } from '../../../constants/visuals';
 import { FiThermometer, FiZap, FiActivity, FiNavigation, FiDroplet } from 'react-icons/fi';
 
 export default function ControlPanel({
@@ -15,7 +14,6 @@ export default function ControlPanel({
     activeSelection,
     activeMenu,
     tripType,
-    travelMode,
     routePath,
     distance,
     currentSpeed,
@@ -23,7 +21,6 @@ export default function ControlPanel({
     totalDuration,
     segments,
     setTripType,
-    setTravelMode,
     startNavigation,
     simulateNavigation,
     handleViewLocation,
@@ -44,7 +41,9 @@ export default function ControlPanel({
     remainingDistance,
     isRouting,
     setCompletedWaypoints,
-    setCurrentLegIndex
+    setCurrentLegIndex,
+    clearPersistence,
+    clearRoute
 }) {
     const { user, signOut } = useAuth();
     const [authMode, setAuthMode] = useState('login');
@@ -52,8 +51,10 @@ export default function ControlPanel({
 
 
     const getTimeDisplay = () => {
-        if (isNavigating && currentSpeed > 1.4) {
-            return formatTime((parseFloat(distance) * 1000) / currentSpeed);
+        if (isNavigating && currentSpeed > 1) {
+     
+            const seconds = (parseFloat(distance) / currentSpeed) * 3600;
+            return formatTime(seconds);
         }
         return totalDuration || '0:00';
     };
@@ -83,7 +84,15 @@ export default function ControlPanel({
         setWaypoints([null]);
         if (setCompletedWaypoints) setCompletedWaypoints(new Set());
         if (setCurrentLegIndex) setCurrentLegIndex(0);
-        showToast('ล้างรายการทั้งหมดสำเร็จ', 'success');
+        
+        if (typeof clearPersistence === 'function') {
+            clearPersistence();
+        }
+        if (typeof clearRoute === 'function') {
+            clearRoute();
+        }
+        
+        showToast('ล้างรายการและแคชเส้นทางสำเร็จ', 'success');
     };
 
     const [urlInput, setUrlInput] = useState('');
@@ -153,7 +162,7 @@ export default function ControlPanel({
                     <div className="flex gap-3 sm:gap-6 items-center flex-1 justify-around ml-1 sm:ml-2">
                         <div className="text-center">
                             <div className="text-xl sm:text-2xl font-black text-white leading-none whitespace-nowrap">
-                                {Math.round(currentSpeed * 3.6)}
+                                {Math.round(currentSpeed)}
                             </div>
                             <div className="text-blue-400 text-[7px] sm:text-[8px] font-black uppercase tracking-widest mt-0.5 sm:mt-1">KM/H</div>
                         </div>
@@ -244,13 +253,13 @@ export default function ControlPanel({
                     <div className="flex flex-col items-center gap-1 sm:gap-2 flex-1 min-w-0 px-1">
                         <button
                             onClick={useCurrentLocation}
-                            className="flex items-center gap-1 sm:gap-1.5 text-blue-500 bg-blue-50/50 px-2 py-0.5 sm:py-1 rounded-full border border-blue-100 shadow-sm max-w-full hover:bg-blue-100 transition-colors group active:scale-95"
+                            className="flex items-center gap-2 sm:gap-1.5 text-blue-500 bg-blue-50/50 px-3 py-1 sm:py-1.5 rounded-full border border-blue-100 shadow-sm max-w-full hover:bg-blue-100 transition-all group active:scale-95"
                         >
-                            <svg className="w-2.5 sm:w-3.5 h-2.5 sm:h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <svg className="w-3.5 sm:w-4 h-3.5 sm:h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="3" />
                                 <line x1="22" x2="18" y1="12" y2="12" /><line x1="6" x2="2" y1="12" y2="12" />
                             </svg>
-                            <span className="text-[8px] sm:text-[12px] font-bold tracking-tight truncate max-w-[70px] sm:max-w-[200px]">
+                            <span className="text-[11px] sm:text-[12px] font-bold tracking-tight truncate max-w-[100px] sm:max-w-[200px]">
                                 {startPoint ? `${startPoint[0].toFixed(4)}, ${startPoint[1].toFixed(4)}` : 'กำลังระบุ...'}
                             </span>
                         </button>
@@ -277,12 +286,12 @@ export default function ControlPanel({
                             value={urlInput}
                             onChange={(e) => setUrlInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleConfirmUrl()}
-                            className="bg-transparent border-none outline-none w-full text-[9px] sm:text-sm font-bold text-gray-700 placeholder:text-gray-400"
+                            className="bg-transparent border-none outline-none w-full text-[11px] sm:text-sm font-bold text-gray-700 placeholder:text-gray-400"
                         />
                     </div>
                     <button
                         onClick={handleConfirmUrl}
-                        className="bg-blue-600 hover:bg-blue-500 text-white font-black px-2.5 sm:px-5 rounded-lg shadow-md active:scale-95 transition-all text-[9.5px] sm:text-xs uppercase tracking-wide flex items-center gap-1.5"
+                        className="bg-blue-600 hover:bg-blue-500 text-white font-black px-2.5 sm:px-5 rounded-lg shadow-md active:scale-95 transition-all text-[11px] sm:text-xs uppercase tracking-wide flex items-center gap-1.5"
                     >
                         <span>ตกลง</span>
                     </button>
@@ -290,15 +299,15 @@ export default function ControlPanel({
 
                 {waypoints.filter(w => w !== null).length > 0 && (
                     <div className="flex items-center justify-between px-0.5">
-                        <div className="flex items-center gap-1 bg-blue-50/50 px-2 py-0.5 rounded-full border border-blue-100/50 w-fit">
-                            <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse"></div>
-                            <span className="text-[8px] font-black text-blue-600 uppercase tracking-wider">
+                        <div className="flex items-center gap-1 bg-blue-50/50 px-2.5 py-1 rounded-full border border-blue-100/50 w-fit">
+                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                            <span className="text-[10px] font-black text-blue-600 uppercase tracking-wider">
                                 {waypoints.filter(w => w !== null).length} จุดแวะพัก
                             </span>
                         </div>
-                        <div className="flex gap-2.5">
-                            <button onClick={handleCopyAllPoints} className="text-[8px] font-black text-blue-500 uppercase tracking-widest hover:text-blue-600 transition-colors">คัดลอกหมด</button>
-                            <button onClick={handleClearAll} className="text-[8px] font-black text-red-500 uppercase tracking-widest hover:text-red-600 transition-colors">ล้างหมด</button>
+                        <div className="flex gap-3">
+                            <button onClick={handleCopyAllPoints} className="text-[10.5px] font-black text-blue-500 uppercase tracking-widest hover:text-blue-600 transition-colors">คัดลอกหมด</button>
+                            <button onClick={handleClearAll} className="text-[10.5px] font-black text-red-500 uppercase tracking-widest hover:text-red-600 transition-colors">ล้างหมด</button>
                         </div>
                     </div>
                 )}
@@ -308,14 +317,44 @@ export default function ControlPanel({
                         if (wp === null) return null;
                         const name = locationNames[`waypoint-${idx}`] || `จุด ${idx + 1}`;
                         return (
-                            <div key={idx} className="bg-gray-50 text-gray-600 px-2 py-0.5 rounded-md border border-gray-100 flex items-center gap-1">
-                                <span className="text-[9px] font-bold truncate max-w-[80px]">{name}</span>
+                            <div key={idx} className="bg-gray-50 text-gray-600 px-2.5 py-1 rounded-md border border-gray-100 flex items-center gap-1.5">
+                                <span className="text-[11px] font-bold truncate max-w-[100px]">{name}</span>
                                 <button onClick={() => removeWaypoint(idx)} className="text-gray-400 hover:text-red-500 transition-colors">
-                                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
                                 </button>
                             </div>
                         );
                     })}
+                </div>
+
+                {/* Trip Type Selection */}
+                <div className="flex gap-2 mt-1 px-0.5">
+                    <button
+                        onClick={() => setTripType('oneway')}
+                        className={`flex-1 py-1.5 sm:py-2 rounded-xl text-[12px] sm:text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1.5 border-2 ${
+                            tripType === 'oneway' 
+                            ? 'bg-blue-50 border-blue-600 text-blue-600 shadow-sm' 
+                            : 'bg-white border-gray-100 text-gray-400 hover:border-blue-200 hover:text-blue-400'
+                        }`}
+                    >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                        </svg>
+                        เดินทางไป
+                    </button>
+                    <button
+                        onClick={() => setTripType('roundtrip')}
+                        className={`flex-1 py-1.5 sm:py-2 rounded-xl text-[12px] sm:text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1.5 border-2 ${
+                            tripType === 'roundtrip' 
+                            ? 'bg-blue-50 border-blue-600 text-blue-600 shadow-sm' 
+                            : 'bg-white border-gray-100 text-gray-400 hover:border-blue-200 hover:text-blue-400'
+                        }`}
+                    >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                        ไป-กลับ
+                    </button>
                 </div>
 
                 <div className="flex gap-1.5 sm:gap-3">

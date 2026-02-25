@@ -3,7 +3,7 @@ export const prefetchRouteTiles = (path, zoomLevels = [16, 17, 18]) => {
     if (!path || path.length === 0 || !navigator.serviceWorker?.controller) return;
 
     const tiles = new Set();
-    const mapUrl = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+    const mapUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
     path.forEach(point => {
         zoomLevels.forEach(z => {
@@ -18,8 +18,7 @@ export const prefetchRouteTiles = (path, zoomLevels = [16, 17, 18]) => {
                         .replace('{s}', sub)
                         .replace('{z}', z)
                         .replace('{x}', x + dx)
-                        .replace('{y}', y + dy)
-                        .replace('{r}', '');
+                        .replace('{y}', y + dy);
                     tiles.add(url);
                 }
             }

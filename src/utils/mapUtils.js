@@ -7,20 +7,32 @@ export const formatTime = (seconds) => {
     return `${m} นาที`;
 };
 
-const geocodeCache = new Map();
+const geocodeCache = (function() {
+    try {
+        const saved = sessionStorage.getItem('optimap_geocode_cache');
+        return saved ? new Map(JSON.parse(saved)) : new Map();
+    } catch(e) { return new Map(); }
+})();
+
+function saveGeocodeCache() {
+    try {
+        const entries = Array.from(geocodeCache.entries()).slice(-100); 
+        sessionStorage.setItem('optimap_geocode_cache', JSON.stringify(entries));
+    } catch(e) {}
+}
+
 let sessionRequestCount = 0;
 let lastRequestTime = 0;
 let isServiceBlocked = false;
-const SESSION_LIMIT = 30;
+const SESSION_LIMIT = 50;
 
 export const reverseGeocode = async (lat, lng) => {
     const cacheKey = `${lat.toFixed(5)},${lng.toFixed(5)}`;
     if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey);
 
     const now = Date.now();
-    const isLikelyBlocked = window.location.hostname.includes('ngrok') || window.location.hostname.includes('localhost');
 
-    if (isServiceBlocked || isLikelyBlocked || now - lastRequestTime < 5000 || sessionRequestCount >= SESSION_LIMIT) {
+    if (isServiceBlocked || now - lastRequestTime < 2000 || sessionRequestCount >= SESSION_LIMIT) {
         return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     }
 
@@ -35,8 +47,11 @@ export const reverseGeocode = async (lat, lng) => {
         }
         if (!res.ok) throw new Error('Geocoding failed');
         const data = await res.json();
-        const address = data.address ? (data.address.road || data.address.suburb || data.display_name.split(',')[0]) : `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+        const address = data.address ? (data.address.road || data.address.suburb || data.address.village || data.display_name.split(',')[0]) : `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+        
         geocodeCache.set(cacheKey, address);
+        saveGeocodeCache();
+        
         return address;
     } catch (e) {
         return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;

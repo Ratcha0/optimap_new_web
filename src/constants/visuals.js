@@ -9,12 +9,6 @@ export const APP_THEME = {
     LIGHT_GLASS: 'bg-white/80 backdrop-blur-2xl border border-white/40'
 };
 
-export const NAVIGATION_MODES = [
-    { id: 'driving', label: 'DRIVE', icon: '🚗' },
-    { id: 'motorbike', label: 'MOTO', icon: '🛵' },
-    { id: 'foot', label: 'WALK', icon: '🚶' },
-    { id: 'bike', label: 'BIKE', icon: '🚴' }
-];
 
 export const TICKET_STATUS = {
     PENDING: { id: 'pending', label: 'รอรับงาน', color: 'text-rose-600', hex: '#E11D48', bg: 'bg-rose-50' },

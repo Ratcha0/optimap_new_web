@@ -67,8 +67,6 @@ export default function CustomerView({ user, sharedLocation }) {
         startPoint: myPosition,
         waypoints,
         locationNames,
-        travelMode: 'driving',
-        tripType: 'oneway',
         isNavigating: false,
     });
 

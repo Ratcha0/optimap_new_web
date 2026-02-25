@@ -20,9 +20,7 @@ export const calculateBearing = (lat1, lon1, lat2, lon2) => {
     return (toDeg(Math.atan2(y, x)) + 360) % 360;
 };
 
-/**
- * Finds the closest point on a line segment defined by p1 and p2 from a given user point.
- */
+
 export const getClosestPointOnSegment = (uLat, uLng, p1, p2) => {
     const Ax = p1[1]; const Ay = p1[0];
     const Bx = p2[1]; const By = p2[0];
@@ -37,7 +35,7 @@ export const getClosestPointOnSegment = (uLat, uLng, p1, p2) => {
     const lenSq = ABx * ABx + ABy * ABy;
     
     let t = lenSq > 0 ? dot / lenSq : -1;
-    t = Math.max(0, Math.min(1, t)); // Clamp to segment
+    t = Math.max(0, Math.min(1, t)); 
 
     const closestLng = Ax + t * ABx;
     const closestLat = Ay + t * ABy;
@@ -109,82 +107,4 @@ export const calculateRemainingDistance = (routePath, startIndex) => {
     return total;
 };
 
-export const getTrimmedRoutePath = (startPoint, routePath, targetIdx, eIdx) => {
-    if (!startPoint || !routePath || routePath.length === 0) return [];
-    
-    // Safety
-    let startI = Math.max(0, Math.min(targetIdx, routePath.length - 1));
-    let endI = (eIdx !== undefined && eIdx !== null) ? eIdx : routePath.length - 1;
-    
-    // Base Check
-    const remainingPath = routePath.slice(startI, endI + 1);
-    
-    if (remainingPath.length <= 1) {
-        if (remainingPath.length > 0) return [[startPoint[0], startPoint[1]], ...remainingPath];
-        return remainingPath;
-    }
 
-    const currentPos = [startPoint[0], startPoint[1]];
-    let activeCoords = [currentPos, ...remainingPath];
-    let foundSegment = false;
-    
-    // Look ahead up to 50 segments (increased from 5 for safety)
-    const lookAheadCount = Math.min(50, remainingPath.length - 1);
-    let lastPassedIndex = -1;
-
-    for (let i = 0; i < lookAheadCount; i++) {
-        const pA = remainingPath[i];
-        const pB = remainingPath[i+1];
-        
-        const Ax = pA[1]; const Ay = pA[0];
-        const Bx = pB[1]; const By = pB[0];
-        const Cx = currentPos[1]; const Cy = currentPos[0];
-
-        const ABx = Bx - Ax;
-        const ABy = By - Ay;
-        const ACx = Cx - Ax;
-        const ACy = Cy - Ay;
-
-        const dot = ACx * ABx + ACy * ABy;
-        const lenSq = ABx * ABx + ABy * ABy;
-        
-        const t = lenSq > 0 ? dot / lenSq : -1;
-
-        if (t > 1) {
-            // Car is past this segment (A->B).
-            // Track this index so if we exit loop, we know we can prune up to here.
-            lastPassedIndex = i;
-            continue;
-        } else if (t >= 0) {
-            // Car is projected ON this segment (between A and B) or slightly before A
-            // Connect Car -> B -> rest...
-            // Note: using i+1 includes point B as the next point
-            activeCoords = [currentPos, ...remainingPath.slice(i + 1)];
-            foundSegment = true;
-            break;
-        } else {
-            // t < 0: Car is projected before A.
-            // This suggests we are technically on this segment (approaching A->B) 
-            // OR we are between the previous segment and this one.
-            // We'll connect Car -> A -> B...
-            activeCoords = [currentPos, ...remainingPath.slice(i)];
-            foundSegment = true;
-            break;
-        }
-    }
-    
-    // Fallback: If loop finished without finding an "active" segment (foundSegment = false)
-    if (!foundSegment) {
-       if (lastPassedIndex !== -1) {
-           // We passed all segments we checked. So the car is likely ahead of the lookAhead window.
-           // Start drawing from the end of the last passed segment.
-           activeCoords = [currentPos, ...remainingPath.slice(lastPassedIndex + 1)];
-       } else {
-           // We didn't pass anything? Maybe t was always < 0? 
-           // Revert to standard fallback
-           activeCoords = [currentPos, ...remainingPath];
-       }
-    }
-    
-    return activeCoords;
-};

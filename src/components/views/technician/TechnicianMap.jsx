@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { MAP_CONFIG } from '../../../constants/visuals';
@@ -6,131 +6,10 @@ import { EXTERNAL_LINKS } from '../../../constants/api';
 import { useToast } from '../../ui/ToastNotification';
 import technicialcar from '../../../assets/technicialcar.png';
 import { createRoot } from 'react-dom/client';
-import VehicleStatusDashboard from '../../ui/VehicleStatusDashboard';
-import { getEngineStatusDisplay } from '../../../utils/statusUtils';
-import { calculateDistance } from '../../../utils/geoUtils';
+import { calculateDistance, toLngLat } from '../../../utils/geoUtils';
 
-const TechnicianPopupContent = ({ tech, allTechs, onMapInteract }) => {
-    const teammates = allTechs.filter(t => 
-        t.active_ticket_id && 
-        t.active_ticket_id === tech.active_ticket_id &&
-        t.id !== tech.id
-    );
-    const displayList = teammates.length > 0 ? [tech, ...teammates] : [tech];
-    const carStatusData = Array.isArray(tech.car_status) ? tech.car_status[0] : tech.car_status;
-    const statusDisplay = carStatusData ? getEngineStatusDisplay(carStatusData) : null;
-
-    return (
-        <div className="p-1 flex flex-col gap-3 min-w-[280px] max-h-[60vh] overflow-y-auto thin-scrollbar font-kanit">
-             <div className="flex items-center gap-3">
-                <div className="relative">
-                    <img 
-                        src={tech.avatar_url || EXTERNAL_LINKS.DEFAULT_AVATAR}
-                        className={`w-12 h-12 rounded-xl object-cover shadow-lg border-2 ${tech.is_primary ? 'border-blue-500' : 'border-indigo-400'}`} 
-                        onError={(e) => { 
-                            if (e.target.src !== EXTERNAL_LINKS.DEFAULT_AVATAR) {
-                                e.target.src = EXTERNAL_LINKS.DEFAULT_AVATAR; 
-                            }
-                        }}
-                    />
-                </div>
-                <div className="min-w-0 flex-1">
-                    <div className="text-[9px] font-black text-blue-500 uppercase tracking-widest leading-none mb-1">
-                        {tech.is_primary && tech.active_ticket_id ? 'ช่างรับงานหลัก' :
-                         tech.team_leader_name ? 'ช่างร่วมทีม' : 
-                         tech.active_ticket_id ? 'ช่างรับงานหลัก' : 'ช่างเทคนิค'}
-                    </div>
-                    <div className="text-sm font-black text-gray-900 leading-none truncate">{tech.full_name}</div>
-                    <div className="text-[9px] text-gray-400 font-bold mt-1">
-                        {tech.team_name || 'ศูนย์บริการ'} • {tech.car_reg || 'ไม่ระบุทะเบียน'}
-                    </div>
-                </div>
-            </div>
-
-            {teammates.length > 0 ? (
-                <details className="group/status">
-                    <summary className="list-none cursor-pointer">
-                        <div className="flex items-center justify-between text-[9px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 p-2 rounded-lg mb-1.5 hover:bg-gray-100 transition-colors">
-                            <div className="flex items-center gap-2">
-                                <span>สถานะรถยนต์</span>
-                                {statusDisplay && (
-                                    <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white rounded shadow-sm border border-gray-100">
-                                        <span className={`w-1 h-1 rounded-full ${statusDisplay.dot} ${!statusDisplay.isCritical ? 'animate-pulse' : ''}`}></span>
-                                        <span className={`${statusDisplay.color} font-bold text-[8px]`}>{statusDisplay.text}</span>
-                                    </div>
-                                )}
-                            </div>
-                            <svg className="w-3 h-3 transform group-open/status:rotate-180 transition-transform text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                            </svg>
-                        </div>
-                    </summary>
-                    <div className="bg-gray-50/50 rounded-xl p-0.5 border border-gray-100 mb-1.5">
-                        <VehicleStatusDashboard carStatus={carStatusData} isCollapsible={true} />
-                    </div>
-                </details>
-            ) : (
-                <div className="bg-gray-50/50 rounded-xl p-0.5 border border-gray-100">
-                    <VehicleStatusDashboard carStatus={carStatusData} />
-                </div>
-            )}
-
-            {teammates.length > 0 && tech.active_ticket_id && (
-                <details className="group/team" open>
-                    <summary className="list-none cursor-pointer mb-1.5">
-                        <div className="flex items-center justify-between text-[9px] font-black text-gray-400 uppercase tracking-widest px-1 hover:text-gray-600 transition-colors">
-                            <span>สมาชิกทีม ({displayList.length})</span>
-                            <svg className="w-3 h-3 transform group-open/team:rotate-180 transition-transform text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                            </svg>
-                        </div>
-                    </summary>
-                    <div className="flex flex-col gap-1.5 max-h-[100px] overflow-y-auto pr-1">
-                        {displayList.map(member => (
-                            <div key={member.id} className={`flex items-center gap-2 p-1 rounded-lg transition-colors ${member.id === tech.id ? 'bg-blue-50 border border-blue-100' : 'bg-white border border-gray-100'}`}>
-                                <img 
-                                    src={member.avatar_url || EXTERNAL_LINKS.DEFAULT_AVATAR} 
-                                    className="w-7 h-7 rounded object-cover shadow-sm shrink-0"
-                                    onError={(e) => { 
-                                        if (e.target.src !== EXTERNAL_LINKS.DEFAULT_AVATAR) {
-                                            e.target.src = EXTERNAL_LINKS.DEFAULT_AVATAR; 
-                                        }
-                                    }}
-                                />
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-[10px] font-black text-gray-900 truncate flex items-center gap-1">
-                                        {member.full_name}
-                                        {member.is_primary && <span className="text-[7px] bg-blue-100 text-blue-600 px-1 rounded shrink-0 font-bold uppercase">หลัก</span>}
-                                    </div>
-                                    <div className="text-[8px] text-gray-400 font-bold leading-none">{member.car_reg}</div>
-                                </div>
-                                {member.phone && (
-                                    <a href={`tel:${member.phone}`} className="p-1 bg-green-500 rounded-md hover:bg-green-600 transition-all shrink-0">
-                                        <svg className="w-3 h-3" fill="none" stroke="white" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                        </svg>
-                                    </a>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </details>
-            )}
-
-            <div className="pt-1.5 border-t border-gray-100">
-                {!tech.is_me && tech.phone && (
-                    <a href={`tel:${tech.phone}`}
-                        className="flex w-full bg-green-600 hover:bg-green-500 text-white font-black h-9 rounded-xl text-[11px] items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-green-500/10 uppercase tracking-widest no-underline border-none cursor-pointer">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                        </svg>
-                        ติดต่อช่าง
-                    </a>
-                )}
-            </div>
-        </div>
-    );
-};
+import TechnicianPopupContent from '../../map/TechnicianPopupContent';
+import BranchMarkers from '../../map/BranchMarkers';
 
 const TechnicianMap = React.memo(({
     defaultCenter,
@@ -180,13 +59,12 @@ const TechnicianMap = React.memo(({
     useEffect(() => { activeSelectionRef.current = activeSelection; }, [activeSelection]);
     useEffect(() => { setSearchResultRef.current = setSearchResult; }, [setSearchResult]);
     useEffect(() => { handleLocationSelectRef.current = handleLocationSelect; }, [handleLocationSelect]);
+    
+    const handleBranchNavigate = useCallback((pos) => {
+        handleLocationSelect('waypoint-0', pos);
+    }, [handleLocationSelect]);
 
-    const toLngLat = (coords) => {
-        if (!coords) return null;
-        if (Array.isArray(coords)) return [coords[1], coords[0]];
-        if (coords.lat !== undefined) return [coords.lng, coords.lat];
-        return null;
-    };
+
 
 
     useEffect(() => {
@@ -233,7 +111,7 @@ const TechnicianMap = React.memo(({
                 m.addLayer({
                     id: 'route-line-future', type: 'line', source: 'route-future',
                     layout: { 'line-join': 'round', 'line-cap': 'round' },
-                    paint: { 'line-color': '#38bdf8', 'line-width': 6, 'line-opacity': 0.4 }
+                    paint: { 'line-color': '#93c5fd', 'line-width': 6, 'line-opacity': 0.8 }
                 });
             }
 
@@ -309,7 +187,7 @@ const TechnicianMap = React.memo(({
                         });
                     }
                 }
-            } catch (err) {}
+            } catch { /* ignore */ }
         });
 
         const onInteraction = (e) => {
@@ -370,9 +248,9 @@ const TechnicianMap = React.memo(({
                 m.setPaintProperty('route-line-glow', 'line-opacity', 0.4);
             }
             if (m.getLayer('route-line-future')) {
-                m.setPaintProperty('route-line-future', 'line-color', '#38bdf8');
+                m.setPaintProperty('route-line-future', 'line-color', '#93c5fd');
                 m.setPaintProperty('route-line-future', 'line-width', 6);
-                m.setPaintProperty('route-line-future', 'line-opacity', 0.4);
+                m.setPaintProperty('route-line-future', 'line-opacity', 0.8);
             }
         }
     }, [isHudMode]);
@@ -469,93 +347,100 @@ const TechnicianMap = React.memo(({
 
     useEffect(() => {
         if (!map.current || !isMapReady) return;
-        const syncRoute = () => {
+        const syncRoute = (isForce = false) => {
             const m = map.current;
-            if (!m || !m.isStyleLoaded()) return;
+            if (!m) return;
+            
+            if (!m.isStyleLoaded() && !isForce) return;
 
             const routeSource = m.getSource('route');
             const futureSource = m.getSource('route-future');
             if (!routeSource || !futureSource) return;
 
             if (!routePath || routePath.length === 0) {
-               
-                if (routeSource) routeSource.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } });
+                routeSource.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } });
                 if (futureSource) futureSource.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } });
                 lastUpdateStateRef.current = { index: -1, time: 0 };
                 return;
             }
 
             const now = Date.now();
-            const sIdx = isNavigating ? currentPointIndex : 0;
-            const stateKey = `${sIdx}-${routePath.length}`;
+            const sIdx = (isNavigating || currentPointIndex > 0) ? currentPointIndex : 0;
             
-            if (lastUpdateStateRef.current.key === stateKey && now - lastUpdateStateRef.current.time < 100) {
-                return;
+            const throttleTime = isNavigating ? 30 : 100;
+            if (!isForce && now - lastUpdateStateRef.current.time < throttleTime) {
+                if (lastUpdateStateRef.current.index === sIdx) return;
             }
-
-            lastUpdateStateRef.current = { key: stateKey, index: sIdx, time: now };
+            lastUpdateStateRef.current = { index: sIdx, time: now };
 
             try {
-                let targetIdx = Math.max(0, Math.min(sIdx, routePath.length - 1));
-                const isFin = !isNavigating && targetIdx >= routePath.length - 1 && routePath.length > 5;
+                let validSIdx = sIdx;
+                if (validSIdx >= routePath.length && routePath.length > 0) {
+                    validSIdx = 0;
+                }
+
+                let targetIdx = Math.max(0, Math.min(validSIdx, routePath.length - 1));
+                const isFin = !isNavigating && targetIdx >= routePath.length - 1 && routePath.length > 5 && sIdx > 0;
                 const eIdx = (routeLegs && routeLegs[currentLegIndex]) ? routeLegs[currentLegIndex].endIndex : routePath.length - 1;
        
                 let activeCoords = [];
                 if (!isFin) {
                     if (startPoint && isNavigating && routePath.length > 1) {
-                         const currentPos = [startPoint[0], startPoint[1]];
                          let nextPointIdx = targetIdx + 1;
                          if (nextPointIdx >= routePath.length) nextPointIdx = routePath.length - 1;
-
-                         activeCoords = [currentPos, ...routePath.slice(nextPointIdx, eIdx + 1)];
+                         activeCoords = [[startPoint[0], startPoint[1]], ...routePath.slice(nextPointIdx, eIdx + 1)];
                     } else {
-                        activeCoords = routePath.slice(Math.max(0, targetIdx), eIdx + 1);
+                        activeCoords = routePath.slice(targetIdx, eIdx + 1);
                     }
-                }
-
-          
-                if (isNavigating && activeCoords.length < 3 && !isFin && targetIdx < eIdx - 5) {
-        
-                    activeCoords = [startPoint, ...routePath.slice(Math.max(0, targetIdx), eIdx + 1)];
                 }
 
                 const future = isFin ? [] : routePath.slice(eIdx);
 
-                routeSource.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: activeCoords.length > 1 ? activeCoords.map(p => [p[1], p[0]]) : [] } });
-                futureSource.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: future.length > 1 ? future.map(p => [p[1], p[0]]) : [] } });
-            } catch (err) {}
+                routeSource.setData({ 
+                    type: 'Feature', 
+                    geometry: { 
+                        type: 'LineString', 
+                        coordinates: activeCoords.length > 1 ? activeCoords.map(p => [p[1], p[0]]) : [] 
+                    } 
+                });
+                
+                futureSource.setData({ 
+                    type: 'Feature', 
+                    geometry: { 
+                        type: 'LineString', 
+                        coordinates: future.length > 1 ? future.map(p => [p[1], p[0]]) : [] 
+                    } 
+                });
+
+                if (!isForce && routePath.length > 0 && activeCoords.length > 1) {
+                    setTimeout(() => {
+                        const checkM = map.current;
+                        if (!checkM) return;
+                        const s = checkM.getSource('route');
+                        if (s && s._data?.geometry?.coordinates?.length === 0) {
+                            syncRoute(true);
+                        }
+                    }, 300);
+                }
+            } catch {
+                /* ignore */
+            }
         };
+
         syncRoute();
-      
-        if (isMapReady) syncRoute();
-        map.current.on('styledata', syncRoute);
-        return () => { if (map.current) map.current.off('styledata', syncRoute); };
+        
+        const retryTimer = setTimeout(() => syncRoute(true), 500);
+        const retryTimer2 = setTimeout(() => syncRoute(true), 1500);
+
+        map.current.on('styledata', () => syncRoute(false));
+        return () => { 
+            if (map.current) map.current.off('styledata', () => syncRoute(false));
+            clearTimeout(retryTimer);
+            clearTimeout(retryTimer2);
+        };
     }, [routePath, isNavigating, currentPointIndex, routeLegs, currentLegIndex, isMapReady, startPoint ? startPoint.toString() : '']);
 
-    useEffect(() => {
-        if (!map.current) return;
-        if (markersRef.current.branches) markersRef.current.branches.forEach(m => m.remove());
-        markersRef.current.branches = [];
-        MAP_CONFIG.BRANCHES.forEach(branch => {
-            const el = document.createElement('div');
-            el.className = 'branch-marker-bubble cursor-pointer';
-            el.innerHTML = `<div class="relative flex flex-col items-center pb-4 group pointer-events-auto"><div class="bg-[#1e293b] px-3 py-1 rounded-3xl shadow-xl border border-white/10 flex flex-col items-center min-w-[70px] relative z-20 transition-all duration-300 group-hover:scale-110 group-hover:-translate-y-1"><div class="flex flex-col items-center -space-y-0.5"><span style="color:#fa7000;font-family:'Impact','Arial Black',sans-serif;font-weight:900;font-size:13px;letter-spacing:-0.2px;line-height:1;transform:scaleY(0.9);">ISUZU</span><span class="text-white font-bold text-[10px]" style="font-family:'Kanit',sans-serif;letter-spacing:0.5px;">ประชากิจ</span></div><div class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1e293b] rotate-45 border-r border-b border-white/10 z-10"></div></div></div>`;
-            const marker = new maplibregl.Marker({ 
-                element: el, 
-                anchor: 'bottom', 
-                rotationAlignment: 'viewport', 
-                pitchAlignment: 'viewport' 
-            })
-                .setLngLat(toLngLat(branch.position))
-                .setPopup(new maplibregl.Popup({ offset: 35, closeButton: true }).setHTML(`<div class="p-4 text-center font-kanit min-w-[200px]"><div class="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">สาขา</div><div class="text-sm font-black text-gray-900 leading-tight mb-2">${branch.name}</div><div class="text-[10px] text-gray-400 font-bold mb-4 flex items-center justify-center gap-1"><svg class="w-3 h-3" fill="none" stroke="#22c55e" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>08:00 - 17:00 น.</div><div class="flex flex-col gap-2"><button class="w-full bg-green-500 text-white font-bold py-3 rounded-xl text-xs border-none cursor-pointer shadow-lg shadow-green-500/10" onclick="window.location.href='tel:${branch.phone}'">ติดต่อสาขา</button><button class="w-full bg-blue-500 text-white font-bold py-3 rounded-xl text-xs border-none cursor-pointer shadow-lg shadow-blue-500/10" onclick="window.handleBranchNavigate('${branch.id}')">เริ่มนำทาง</button></div></div>`))
-                .addTo(map.current);
-            markersRef.current.branches.push(marker);
-        });
-        window.handleBranchNavigate = (id) => {
-            const b = MAP_CONFIG.BRANCHES.find(b => b.id === id);
-            if (b) handleLocationSelect('waypoint-0', b.position);
-        };
-    }, []);
+    // Branch markers are now handled via BranchMarkers component in the JSX return
 
     const allTechs = useMemo(() => {
         const list = [...otherTechs];
@@ -686,6 +571,15 @@ const TechnicianMap = React.memo(({
     return (
         <div className="w-full h-full relative">
             <div ref={mapContainer} className="w-full h-full" onClick={() => onMapInteract?.('click')} />
+            
+            {isMapReady && (
+                <BranchMarkers 
+                    map={map.current} 
+                    onNavigate={handleBranchNavigate} 
+                    showToast={showToast} 
+                />
+            )}
+
             {activeSelection && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur px-4 py-2 rounded-full shadow-lg border border-blue-100 z-[2000] animate-bounce">
                     <span className="text-blue-600 font-bold text-sm">📍 กำลังเลือกตำแหน่ง...</span>
@@ -726,7 +620,9 @@ const TechnicianMap = React.memo(({
     );
 }, (p, n) => {
     
-    const routeChanged = p.routePath !== n.routePath || (p.routePath && n.routePath && p.routePath.length !== n.routePath.length);
+    const routeChanged = p.routePath !== n.routePath || 
+                         (p.routePath?.length !== n.routePath?.length) || 
+                         (p.routePath?.[0]?.[0] !== n.routePath?.[0]?.[0]);
     const waypointsChanged = p.waypoints !== n.waypoints;
     
     if (routeChanged || waypointsChanged) return false;

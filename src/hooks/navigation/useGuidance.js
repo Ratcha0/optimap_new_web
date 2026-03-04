@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { calculateDistance, calculateBearing } from '../../utils/geoUtils';
 
 export const useGuidance = ({
@@ -97,18 +97,26 @@ export const useGuidance = ({
         }
     }, [isWaitingForContinue, routeLegs, onLegComplete, speak]);
 
+    const cumulativeDistances = useMemo(() => {
+        if (!routePath || routePath.length === 0) return [];
+        const dists = [0];
+        let total = 0;
+        for (let i = 0; i < routePath.length - 1; i++) {
+            total += calculateDistance(routePath[i][0], routePath[i][1], routePath[i + 1][0], routePath[i + 1][1]);
+            dists.push(total);
+        }
+        return dists;
+    }, [routePath]);
+
     const calculateETA = useCallback((currentIndex, speed) => {
-        if (!routePath || routePath.length === 0 || currentIndex >= routePath.length - 1) {
+        if (!routePath || routePath.length === 0 || currentIndex >= routePath.length - 1 || cumulativeDistances.length === 0) {
             setRemainingDistance(0);
             setEta(0);
             smoothedEtaRef.current = null;
             return;
         }
 
-        let totalDist = 0;
-        for (let i = currentIndex; i < routePath.length - 1; i++) {
-            totalDist += calculateDistance(routePath[i][0], routePath[i][1], routePath[i + 1][0], routePath[i + 1][1]);
-        }
+        const totalDist = cumulativeDistances[cumulativeDistances.length - 1] - cumulativeDistances[currentIndex];
 
         setRemainingDistance(totalDist);
         const currentSpeedKmh = speed || 0;

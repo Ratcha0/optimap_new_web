@@ -88,51 +88,50 @@ const AdminDashboard = ({ user, userProfile }) => {
         if (!user?.id) return;
         if (!silent) setLoading(true);
         try {
-            const [profileRes, allProfilesRes] = await Promise.all([
-                supabase.from('profiles').select('*').eq('id', user.id).single(),
-                supabase.from('profiles').select('*, car_status(*)')
-            ]);
+            // Merge profile fetches into one request
+            const { data: allProfiles, error: profErr } = await supabase
+                .from('profiles')
+                .select('*, car_status(*)');
+            
+            if (profErr) throw profErr;
 
-            if (profileRes.data) setLocalProfile(profileRes.data);
-            const allProfiles = allProfilesRes.data || [];
+            const currentProfile = allProfiles.find(p => p.id === user.id);
+            if (currentProfile) setLocalProfile(currentProfile);
 
-         
             const rawTechs = allProfiles.filter(p => p.role === 'technician');
             const currentUsers = allProfiles.filter(p => p.role === 'user');
 
-     
-            const { data: activeTickets } = await supabase
-                .from('support_tickets')
-                .select('id, technician_id')
-                .not('technician_id', 'is', null)
-                .in('status', ['pending', 'accepted', 'in_progress', 'arrived', 'working']);
+            // Get active tickets and their assignments in parallel
+            const [ticketsRes, assignmentsRes] = await Promise.all([
+                supabase.from('support_tickets')
+                    .select('id, technician_id, status, issue_type')
+                    .in('status', ['pending', 'accepted', 'in_progress', 'arrived', 'working']),
+                supabase.from('ticket_assignments')
+                    .select('ticket_id, technician_id, status, role')
+            ]);
 
-            const ticketIds = (activeTickets || []).map(t => t.id);
-            let activeAssignments = [];
-            if (ticketIds.length > 0) {
-                const { data } = await supabase
-                    .from('ticket_assignments')
-                    .select('ticket_id, technician_id, status, role');
-                activeAssignments = (data || []).filter(a => ticketIds.includes(a.ticket_id));
-            }
+            const activeTickets = ticketsRes.data || [];
+            const allAssignments = assignmentsRes.data || [];
+            
+            const ticketIds = activeTickets.map(t => t.id);
+            const activeAssignments = allAssignments.filter(a => ticketIds.includes(a.ticket_id));
 
-       
             const ticketLeaderMap = {};
-            (activeTickets || []).forEach(t => {
+            activeTickets.forEach(t => {
                 const leader = rawTechs.find(tech => tech.id === t.technician_id);
-                ticketLeaderMap[t.id] = { leaderId: t.technician_id, leaderName: leader?.full_name || 'ไม่ทราบ' };
+                ticketLeaderMap[t.id] = { 
+                    leaderId: t.technician_id, 
+                    leaderName: leader?.full_name || 'ไม่ทราบ' 
+                };
             });
 
-        
             const currentTechs = rawTechs.map(tech => {
-         
-                const headTicket = (activeTickets || []).find(t => t.technician_id === tech.id);
+                const headTicket = activeTickets.find(t => t.technician_id === tech.id);
                 if (headTicket) {
                     const memberCount = activeAssignments.filter(a => a.ticket_id === headTicket.id).length;
                     return { ...tech, active_ticket_id: headTicket.id, is_primary: true, team_leader_name: null, team_member_count: memberCount };
                 }
 
-              
                 const myAssignment = activeAssignments.find(a => a.technician_id === tech.id);
                 if (myAssignment) {
                     const leader = ticketLeaderMap[myAssignment.ticket_id];
@@ -186,7 +185,7 @@ const AdminDashboard = ({ user, userProfile }) => {
                 activeJobs: active,
                 completedJobs: completed
             });
-        } catch (err) {
+        } catch {
            
         } finally {
             if (!silent) setLoading(false);

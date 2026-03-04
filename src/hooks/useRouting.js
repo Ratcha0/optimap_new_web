@@ -2,9 +2,11 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { calculateDistance } from '../utils/geoUtils';
 import { prefetchRouteTiles } from '../utils/prefetchUtils';
 import { formatTime, translateInstruction } from '../utils/mapUtils';
+import { ROUTING_API } from '../constants/api';
 
-const PRIMARY_OSRM = 'https://router.project-osrm.org';
-const SECONDARY_OSRM = 'https://routing.openstreetmap.de/routed-car';
+const PRIMARY_OSRM = ROUTING_API.LOCAL_OSRM;
+const SECONDARY_OSRM = ROUTING_API.OSRM_PRO;
+const FALLBACK_OSRM = ROUTING_API.OSM_CAR;
 
 export const useRouting = ({
     startPoint,
@@ -34,7 +36,15 @@ export const useRouting = ({
     const lastWaypointsRef = useRef("");
     const lastRoutedPos = useRef(null);
     const debounceTimerRef = useRef(null);
+    const abortControllerRef = useRef(null); 
     const routingCache = useRef({});
+    const locationNamesRef = useRef(locationNames);
+    
+   
+    useEffect(() => {
+        locationNamesRef.current = locationNames;
+    }, [locationNames]);
+
 
     const clearRoute = useCallback(() => {
         setRouteLegs([]);
@@ -56,7 +66,9 @@ export const useRouting = ({
             .filter(item => item.coords !== null);
 
         if (!startPoint || validWpsWithIndexes.length === 0) {
-            if (routePath.length > 0) clearRoute();
+            if (routePath.length > 0) {
+                setTimeout(clearRoute, 0);
+            }
             lastWaypointsRef.current = "";
             return;
         }
@@ -88,7 +100,9 @@ export const useRouting = ({
         }
 
         if (coordsForApi.length < 2) {
-            if (routePath.length > 0) clearRoute();
+            if (routePath.length > 0) {
+                setTimeout(clearRoute, 0);
+            }
             return;
         }
 
@@ -100,26 +114,36 @@ export const useRouting = ({
         const processData = (data) => {
             lastRoutedPos.current = startPoint;
 
-            const route = isOptimized ? data.trips[0] : data.routes[0];
+            let route;
+            let waypointsMeta = null;
+
+            if (data._source === 'maptiler') {
+                route = data.trips?.[0];
+                waypointsMeta = data.waypoints;
+            } else {
+                route = isOptimized ? data?.trips?.[0] : data?.routes?.[0];
+                waypointsMeta = isOptimized ? data.waypoints : null;
+            }
+
+            if (!route) {
+                setError("ไม่พบเส้นทางที่แนะนำ");
+                return;
+            }
             const legs = route.legs;
-            const waypointsMeta = isOptimized ? data.waypoints : null;
             
             if (legs) {
                 const newOrder = {};
                 const absoluteTargetIndices = [];
 
                 if (isOptimized && waypointsMeta) {
-                   
-                    waypointsMeta.sort((a, b) => a.trips_index - b.trips_index);
-                    waypointsMeta.forEach((wpMeta, seq) => {
+                    const sortedMeta = [...waypointsMeta].sort((a, b) => a.trips_index - b.trips_index);
+                    sortedMeta.forEach((wpMeta, seq) => {
                         const inputIdx = wpMeta.waypoint_index;
                         const originalId = inputIndicesMap[inputIdx];
                         if (originalId >= 0) newOrder[originalId] = seq;
-                        
                         if (seq > 0) absoluteTargetIndices.push(originalId);
                     });
                     
-                   
                     while (absoluteTargetIndices.length < legs.length) {
                          absoluteTargetIndices.push(absoluteTargetIndices[absoluteTargetIndices.length-1]);
                     }
@@ -153,19 +177,19 @@ export const useRouting = ({
                         });
                     }
                     
-                   
                     let fromName = "จุดเริ่มต้น";
                     let toName = "ปลายทาง";
                     
                     if (isOptimized && waypointsMeta) {
-                        const startMeta = waypointsMeta[i];
-                        const endMeta = waypointsMeta[i+1];
+                        const startMeta = waypointsMeta.find(w => w.trips_index === i);
+                        const endMeta = waypointsMeta.find(w => w.trips_index === i + 1);
                         const getOptimizedName = (meta) => {
-                            if (!meta) return "ปลายทาง";
+                            if (!meta) return "จุดเริ่มต้น";
+                            const currentNames = locationNamesRef.current;
                             const idx = inputIndicesMap[meta.waypoint_index];
-                            if (idx === -1) return locationNames['start'] || "จุดเริ่มต้น";
+                            if (idx === -1) return currentNames['start'] || "จุดเริ่มต้น";
                             if (idx === -2) return "กลับสู่จุดเริ่มต้น";
-                            return locationNames[`waypoint-${idx}`] || `จุดหมายที่ ${idx + 1}`;
+                            return currentNames[`waypoint-${idx}`] || `จุดหมายที่ ${idx + 1}`;
                         };
                         fromName = getOptimizedName(startMeta);
                         toName = endMeta ? getOptimizedName(endMeta) : (isNavigating ? "จุดหมาย" : "ปลายทาง");
@@ -173,18 +197,19 @@ export const useRouting = ({
                         const fromIdx = inputIndicesMap[i];
                         const toIdx = inputIndicesMap[i + 1] !== undefined ? inputIndicesMap[i + 1] : -99;
                         const getName = (idx) => {
-                            if (idx === -1) return locationNames['start'] || "จุดเริ่มต้น";
+                            const currentNames = locationNamesRef.current;
+                            if (idx === -1) return currentNames['start'] || "จุดเริ่มต้น";
                             if (idx === -2) return "กลับสู่จุดเริ่มต้น";
                             if (idx === -99) return "ปลายทาง";
-                            return locationNames[`waypoint-${idx}`] || `จุดหมายที่ ${idx + 1}`;
+                            return currentNames[`waypoint-${idx}`] || `จุดหมายที่ ${idx + 1}`;
                         };
                         fromName = getName(fromIdx);
                         toName = getName(toIdx);
                     }
 
+
                     legInfos.push({
-                        from: fromName,
-                        to: toName,
+                        from: fromName, to: toName,
                         dist: (leg.distance / 1000).toFixed(2),
                         time: Math.round(leg.duration / 60) + " นาที",
                         isPassed: isNavigating && i < currentLegIndex,
@@ -200,7 +225,6 @@ export const useRouting = ({
                 setDistance((route.distance / 1000).toFixed(2));
                 setTotalDuration(formatTime(route.duration));
                 setNavigationSteps(allSteps);
-                
                 if (setRerouteTrigger) setRerouteTrigger(0);
             }
         };
@@ -212,52 +236,74 @@ export const useRouting = ({
 
         const performFetch = async () => {
             const now = Date.now();
-            if (now - lastFetchTimeRef.current < 600) return;
+            if (abortControllerRef.current) abortControllerRef.current.abort();
+            
             lastFetchTimeRef.current = now;
             setIsLoading(true);
             setError(null);
 
             const isRound = tripType === 'roundtrip';
-            const options = `steps=true&geometries=geojson&overview=full&source=first&destination=${isRound ? 'last' : 'any'}&roundtrip=false`;
             const abortController = new AbortController();
+            abortControllerRef.current = abortController; 
             const timeoutId = setTimeout(() => abortController.abort(), 15000);
-            
-            const fetchRoute = async (host) => {
+
+            const fetchOsrm = async (host) => {
+                
+                const destParam = isRound ? 'last' : 'last'; 
+                const options = `steps=true&geometries=geojson&overview=full&source=first&destination=${destParam}&roundtrip=false`;
                 const url = `${host}/${apiPath}/v1/driving/${coordStr}?${options}`;
                 const res = await fetch(url, { signal: abortController.signal });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                if (!res.ok) throw new Error(`OSRM Error ${res.status}`);
                 const data = await res.json();
                 if (data.code !== 'Ok') throw new Error(data.code);
                 return data;
             };
 
-            Promise.any([
-                fetchRoute(SECONDARY_OSRM),
-                fetchRoute(PRIMARY_OSRM)
-            ])
-            .then(data => {
-                clearTimeout(timeoutId);
-                abortController.abort();
-                routingCache.current[cacheKey] = { data, time: Date.now() };
-                processData(data);
-            })
-            .catch(err => {
-                if (err.name === 'AbortError') return;
-                console.error("Routing error:", err);
-                setError("เซิร์ฟเวอร์คำนวณเส้นทางขัดข้อง โปรดลองใหม่");
-            })
-            .finally(() => {
-                clearTimeout(timeoutId);
-                setIsLoading(false);
-            });
+            const MAX_RETRIES = 2;
+            let retryCount = 0;
+
+            const attemptFetch = async () => {
+                try {
+                    // ทดสอบ Server ของเราเองโดยตรง ปิดเส้นทางสำรอง
+                    const data = await fetchOsrm(PRIMARY_OSRM);
+                    /* 
+                    const data = await Promise.any([
+                        fetchOsrm(PRIMARY_OSRM),
+                        fetchOsrm(SECONDARY_OSRM)
+                    ]);
+                    */
+
+                    clearTimeout(timeoutId);
+                    routingCache.current[cacheKey] = { data, time: Date.now() };
+                    processData(data);
+                } catch (err) {
+                    if (err.name === 'AbortError' || abortController.signal.aborted) return;
+                    
+                    if (retryCount < MAX_RETRIES) {
+                        retryCount++;
+                        console.warn(`Routing failed, retrying (${retryCount}/${MAX_RETRIES})...`);
+                        await new Promise(resolve => setTimeout(resolve, 1500));
+                        return attemptFetch();
+                    }
+                    setError("เซิร์ฟเวอร์คำนวณเส้นทางขัดข้อง โปรดลองใหม่");
+                } finally {
+                    clearTimeout(timeoutId);
+                    setIsLoading(false);
+                }
+            };
+
+            attemptFetch();
         };
 
-        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
         if (isOnline) {
-            debounceTimerRef.current = setTimeout(performFetch, 500);
+            debounceTimerRef.current = setTimeout(performFetch, 200);
         }
-        return () => clearTimeout(debounceTimerRef.current);
-    }, [startPoint, waypoints, locationNames, tripType, isNavigating, rerouteTrigger, completedWaypoints, originalStart, currentLegIndex, setRerouteTrigger, clearRoute, isOnline]);
+        
+        return () => {
+            if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+            if (abortControllerRef.current) abortControllerRef.current.abort();
+        };
+    }, [startPoint, waypoints, tripType, isNavigating, rerouteTrigger, completedWaypoints, originalStart, currentLegIndex, setRerouteTrigger, clearRoute, isOnline]);
 
     return { routeLegs, routePath, segments, distance, totalDuration, navigationSteps, visitOrder, legTargetIndices, clearRoute, isLoading, error };
 };

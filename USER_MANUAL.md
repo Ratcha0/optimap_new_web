@@ -88,24 +88,24 @@ maptiler ค้นหาสถานที่
 
 ## 5. ประวัติการพัฒนาและสถานะปัจจุบัน (Development History & Status) 📝
 
-### 🗓️ กุมภาพันธ์ 2026: ยุคแห่งความเสถียรและ 3D
+### 🗓️ กุมภาพันธ์ 2026: ยุคแห่งความเสถียรและความเป็นส่วนตัว
+
+*   **27 ก.พ. 2026 (Private Infrastructure & OSRM Migration):**
+    *   **🏠 Self-hosted OSRM Backend:** ย้ายระบบคำนวณเส้นทางจาก Public API มาเป็น **Private OSRM Server** รันผ่าน Docker บนเครื่องคอมพิวเตอร์ส่วนตัว เพื่อให้ได้ความเร็วในการตอบสนองสูงสุด (Low Latency) และไม่จำกัดจำนวน Request
+    *   **🐳 Dockerized Deployment:** พัฒนากระบวนการติดตั้งแบบ Containerize ครบวงจร (Extract, Partition, Customize) รองรับแผนที่ประเทศไทยฉบับล่าสุดจาก Geofabrik
+    *   **📡 Remote Testing (ngrok/Cloud):** ตั้งค่าระบบ Tunneling (ngrok) และวางแผนเตรียมย้ายขึ้น Google Cloud / Oracle Cloud เพื่อความเสถียรระดับ 24/7
+    *   **🛡️ Security CSP Policy:** อัปเดต Content Security Policy เพื่อรองรับการเชื่อมต่อกับเซิร์ฟเวอร์นำทางส่วนตัวอย่างปลอดภัย
+    *   **💰 Cost Optimization Analysis:** สรุปโครงสร้างค่าใช้จ่ายใหม่ โดยลดค่า API รายหัวลงเหลือ 0 บาท และเปลี่ยนเป็นค่าใช้จ่ายเหมาจ่ายรายเดือนของเซิร์ฟเวอร์แทน
 
 *   **25 ก.พ. 2026 (Reliability & UX Overhaul):**
-    *   **🛰️ Geolocation Auto-Retry:** พัฒนาระบบกู้คืนสัญญาณพิกัดอัตโนมัติ (Self-healing) หากเกิดปัญหา Geolocation Timeout ระบบจะทำการ Restart Hardware GPS ให้ทันทีโดยไม่ต้อง Refresh หน้าจอ
-    *   **📏 Mobile UX Scaling:** ขยายขนาดองค์ประกอบ UI (ปุ่ม, ฟอนต์, พิกัด) ในแผงควบคุมให้มีขนาดที่เหมาะสมกับการกดขณะขับขี่ (Fat-finger friendly)
-    *   **📍 Enhanced Markers:** ปรับขนาดหมุดตำแหน่งตัวเอง (Self-marker) ให้สมดุลและมองเห็นง่ายขึ้นทั้งฝั่งช่างและลูกค้า
-    *   **🔄 Trip Type Logic Fix:** แก้โจทย์การสลับโหมด One-way / Round-trip ให้รวดเร็วขึ้นด้วยระบบ Intelligent Cache ที่ทำงานได้แม่นยำแม้จะดึงข้อมูลเก่ามาใช้
-    *   **⚡ Codebase Refactoring:** ลบโค้ดส่วนเกินและ Dead Variable ทั่วทั้งระบบ เพื่อให้แอปโหลดเร็วขึ้นและลดภาระการประมวลผลของหน่วยความจำ
+    *   **🛰️ Geolocation Auto-Retry:** พัฒนาระบบกู้คืนสัญญาณพิกัดอัตโนมัติ (Self-healing) หากเกิดปัญหา Geolocation Timeout
+    *   **📏 Mobile UX Scaling:** ขยายขนาดองค์ประกอบ UI ให้เหมาะสมกับการกดขณะขับขี่ (Fat-finger friendly)
+    *   **⚡ Codebase Refactoring:** ลดความซ้ำซ้อนของโค้ด ย้ายการแปลงพิกัดไปไว้ที่ต้นทางเพื่อความเร็วสูงสุด
 
 *   **24 ก.พ. 2026 (Navigation Intelligence Upgrade):**
-    *   **� Dynamic Voice Guidance:** ระบบเสียงอัจฉริยะปรับระยะแจ้งเตือนตามความเร็วรถ (เร็ว-เตือนไกล / ช้า-เตือนกระชับ) พร้อมระบบสรุปทางตรงยาว (Long Straight Summary)
-    *   **�️ Lane Guidance:** บอกข้อมูลเลนที่ควรอยู่ "ชิดซ้าย/ชิดขวา/เลนกลาง" และระบุทางออกวงเวียนที่แม่นยำ (ถอดจาก OSRM Intersections)
-    *   **🧭 Advanced Map Sync:** พัฒนาระบบซูมเข้าแยกอัตโนมัติ (Auto-zoom on Maneuver) และปรับองศาความเอียง (Pitch) ตามความเร็วเพื่อทัศนวิสัยที่ดีที่สุด
-    *   **�️ GPS Jitter Filtering:** ระบบล็อคทิศทางรถเมื่อจอดนิ่ง ป้องกันแผนที่หมุนวน (Map Spinning) และเกลี่ยการหมุนให้นุ่มนวลแบบ Low-pass Filter
-    *   **🔮 Predictive Dead Reckoning:** ปรับปรุงการนำทางต่อเนื่องเมื่อสัญญาณหาย (Lost Signal) โดยรถจะยังคงไหลไปตามความโค้งของถนนอัตโนมัติ
-    *   **⌛ ETA Smoothing:** ใช้ระบบค่าเฉลี่ยถ่วงน้ำหนัก (EMA) ทำให้เวลาถึงที่หมาย (ETA) นิ่งและแม่นยำ ไม่กระโดดตามการเบรกหรือเร่ง
-    *   **🔋 Smart Battery Saver:** ระบบประหยัดพลังงานอัจฉริยะ ลดความถี่การวาดแผนที่ลง 250 เท่าเมื่อรถจอดนิ่งนานเกิน 1 นาที
-    *   **🎵 Custom Signature Chime:** เสียงแจ้งเตือน 3 จังหวะ (G5-B5-E6) ที่เป็นเอกลักษณ์เฉพาะตัวสไตล์ Hi-tech Luxury
+    *   **🗣️ Dynamic Voice Guidance:** ระบบเสียงอัจฉริยะปรับระยะแจ้งเตือนตามความเร็วรถ
+    *   **🛣️ Lane Guidance:** บอกข้อมูลเลนที่ควรอยู่ "ชิดซ้าย/ชิดขวา/เลนกลาง"
+    *   **🧭 Advanced Map Sync:** ซูมเข้าแยกอัตโนมัติ (Auto-zoom) และปรับมุมมองตามสถานการณ์
 
 ### 🛠️ ก่อนหน้า (Foundation & Core):
 *   **23 ก.พ. 2026 (System Hardening & Bug Fixes):**
@@ -117,7 +117,68 @@ maptiler ค้นหาสถานที่
 *   **Share Location:** พัฒนาระบบแชร์ตำแหน่งผ่าน URL ให้เปิดดูได้ทันทีผ่านเบราว์เซอร์
 
 ---
-*อัปเดตล่าสุด: 25 กุมภาพันธ์ 2026 (15:20 น.)*
-*พัฒนาโดย Ratchanon - ระบบ OptiMap สำหรับ Isuzu ประจักษ์กิจ (Antigravity Enhanced)*
+
+## 6. ระบบเซิร์ฟเวอร์นำทางส่วนตัว (Private OSRM Hosting) 🖥️
+
+เพื่อให้โปรเจกต์รองรับช่างเทคนิคจำนวนมาก (Scale) โดยไม่เสียค่าใช้จ่าย API มหาศาล เราจึงใช้ระบบ **Self-hosted OSRM**:
+
+### 📦 ขั้นตอนการติดตั้ง (Deployment Workflow)
+1. **Download:** โหลดข้อมูลแผนที่ล่าสุด (`thailand-latest.osm.pbf`)
+2. **Extract:** ระบุโปรไฟล์ยานพาหนะ (car.lua) และสกัดข้อมูลถนน
+3. **Partition & Customize:** จัดหมวดหมู่สำหรับการหาเส้นทางแบบรวดเร็ว (MLD Algorithm)
+4. **Serve:** รัน API Server ผ่าน Docker พอร์ต **5000**
+
+### 🖥️ รายละเอียดสเปกเซิร์ฟเวอร์ (Server Specifications)
+
+| ทรัพยากร (Resource) | ขั้นต่ำ (Minimum) | แนะนำ (Recommended) |
+| :--- | :--- | :--- |
+| **CPU** | 2 vCPU | **4 vCPU** |
+| **RAM** | 4 GB | **8 GB** |
+| **Storage (SSD)** | 20 GB | **40 - 50 GB** |
+| **Network** | 100 Mbps | **1 Gbps** |
+| **OS** | Ubuntu 22.04 LTS | Ubuntu 24.04 LTS |
+
+### 🛠️ การตั้งค่าการเชื่อมต่อ (Connectivity)
+*   **Local Testing:** ใช้ `http://localhost:5000` (จำกัดเฉพาะในคอมตัวกลาง)
+*   **Mobile Testing (Wi-Fi):** ใช้เลข IP ของเครื่องเซิร์ฟเวอร์ (เช่น `http://192.168.1.xxx:5000`)
+*   **Remote Testing (ngrok):** ใช้ URL แปลงพิกัดเพื่อเทสผ่าน 4G/5G จากนอกสถานที่
+*   **Production Hosting:** แนะนำให้ใช้ **Google Cloud (GCP)** หรือ **Oracle Cloud (RAM 24GB Free)** เพื่อความเสถียรสูงสุด
 
 ---
+
+*อัปเดตล่าสุด: 27 กุมภาพันธ์ 2026 (16:00 น.)*
+*พัฒนาโดย Ratchanon - ระบบ OptiMap สำหรับ Isuzu ประจักษ์กิจ (Antigravity Enhanced)*
+ 
+คำสั่งสร้าง Dockerfile สำหรับ OSRM Server ใช้ hugging face
+
+*ระบบจะทำการโหลดข้อมูลแผนที่ประเทศไทยทั้งหมด แต่ว่าจะใช้เวลาประมาณ 15-20 นาทีตอนเปิดครั้งแรก และถ้าไม่มีผู้ใช้งาน 2-3 วันระบบจะเข้าสู่สถานะ sleep mode แต่ถ้ามีผู้ใช้งานจะเริ่มทำงานอีกครั้ง แต่จะใช้เวลาประมาณ 15-20 นาทีอีกครั้ง
+
+*เราไม่สามารถ build โหลดครั้งเดียวได้เนื่องจากข้อจำกัดของ hugging face ทำให้ build ไม่เสร็จ ระบบจะไม่สามารถใช้งานได้
+
+# Stage 1: โหลดแผนที่ประเทศไทย (304 MB)
+FROM alpine:latest AS downloader
+RUN apk add --no-cache curl
+WORKDIR /data
+RUN curl -fL -A "Mozilla/5.0" -o map.pbf https://download.geofabrik.de/asia/thailand-latest.osm.pbf
+
+# Stage 2: รัน OSRM
+FROM osrm/osrm-backend:latest
+WORKDIR /osrm-data
+COPY --from=downloader /data/map.pbf ./map.pbf
+
+USER root
+RUN chown -R 1000:1000 /osrm-data
+USER 1000
+
+ENTRYPOINT []
+EXPOSE 7860
+
+# --- สั่งรันเรียงลำดับ (ใช้ 1 Thread เพื่อให้แรม 16GB ไม่ล้น) ---
+# ขั้นตอนนี้จะใช้เวลาประมาณ 15-20 นาทีในหน้า Logs นะครับ
+CMD echo "--- [1/3] EXTRACTING THAILAND (PLEASE WAIT 15 MIN) ---" && \
+    osrm-extract -p /opt/car.lua map.pbf --threads 1 && \
+    echo "--- [2/3] PREPARING ROUTES (THREADS:1) ---" && \
+    osrm-partition map.osrm --threads 1 && \
+    osrm-customize map.osrm --threads 1 && \
+    echo "--- [3/3] THAILAND SERVER ONLINE! ---" && \
+    osrm-routed --algorithm mld map.osrm --port 7860

@@ -65,8 +65,8 @@ export function useTeamManager(user, setViewMode) {
             });
 
             setOtherTechs(processedData);
-        } catch (err) {
-            
+        } catch {
+            /* ignore */
         }
     }, [user]);
 
@@ -98,8 +98,8 @@ export function useTeamManager(user, setViewMode) {
                 is_primary: active?.role === 'primary' || active?.role === 'technician',
                 status: active?.status || 'none'
             });
-        } catch (err) {
-            
+        } catch {
+            /* ignore */
         }
     }, [user]);
 
@@ -129,8 +129,8 @@ export function useTeamManager(user, setViewMode) {
 
             setPendingInvite(inviteData);
             speak(`คุณ ${inviteData.sender_name} ชวนคุณเข้าร่วมทีมงาน ${ticketData?.issue_type || ''} ค่ะ`);
-        } catch (err) {
-          
+        } catch {
+          /* ignore */
         }
     }, []);
 
@@ -159,8 +159,8 @@ export function useTeamManager(user, setViewMode) {
                     fetchInviteDetails(latestInvite);
                 }
             }
-        } catch (err) {
-            
+        } catch {
+            /* ignore */
         }
     }, [user?.id, fetchInviteDetails]);
 
@@ -199,8 +199,8 @@ export function useTeamManager(user, setViewMode) {
                 .from('ticket_assignments')
                 .delete()
                 .eq('id', inviteId);
-        } catch (err) {
-            
+        } catch {
+            /* ignore */
         }
     };
 

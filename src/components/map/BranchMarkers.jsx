@@ -46,7 +46,7 @@ const BranchMarkers = ({ map, onNavigate, showToast }) => {
                 </div>
             `;
 
-            const popup = new maplibregl.Popup({ offset: 25, closeButton: true })
+            const popup = new maplibregl.Popup({ offset: 25, closeButton: true, closeOnClick: false })
                 .setHTML(popupContent);
 
             const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })

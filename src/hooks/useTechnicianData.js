@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { useToast } from '../components/ui/ToastNotification';
 import { useConnectionManager } from './useConnectionManager';
@@ -122,7 +122,7 @@ export function useTechnicianData(user) {
         try {
             const { error } = await supabase.from('profiles').update(updateData).eq('id', user.id);
             if (error) throw error;
-        } catch (err) {
+        } catch {
             queueUpdate('profiles', user.id, updateData);
         }
     }, [user?.id, queueUpdate]);

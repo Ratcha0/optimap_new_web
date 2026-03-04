@@ -6,8 +6,10 @@ export const SEARCH_API = {
 };
 
 export const ROUTING_API = {
+    LOCAL_OSRM: 'https://optimap-optimap-router.hf.space',
+    OSRM_PRO: 'https://router.project-osrm.org',
     OSM_CAR: 'https://routing.openstreetmap.de/routed-car',
-    OSRM_PRO: 'https://router.project-osrm.org'
+    MAPTILER_BASE: 'https://api.maptiler.com/navigation/v1'
 };
 
 export const EXTERNAL_LINKS = {

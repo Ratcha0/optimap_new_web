@@ -171,14 +171,14 @@ export default function ControlPanel({
                             <div className="text-xl sm:text-2xl font-black text-white leading-none whitespace-nowrap">
                                 {remainingDistance ? (remainingDistance / 1000).toFixed(1) : '0.0'}
                             </div>
-                            <div className="text-white/40 text-[7px] sm:text-[8px] font-black uppercase tracking-widest mt-0.5 sm:mt-1">กม. เหลือ</div>
+                            <div className="text-white/40 text-[9px] sm:text-[10px] font-black uppercase tracking-widest mt-0.5 sm:mt-1">กม. เหลือ</div>
                         </div>
                         <div className="w-px h-6 sm:h-8 bg-white/10"></div>
                         <div className="text-center">
                             <div className="text-xl sm:text-2xl font-black text-white leading-none whitespace-nowrap">
                                 {eta || '--'}
                             </div>
-                            <div className="text-white/40 text-[7px] sm:text-[8px] font-black uppercase tracking-widest mt-0.5 sm:mt-1">
+                            <div className="text-white/40 text-[9px] sm:text-[10px] font-black uppercase tracking-widest mt-0.5 sm:mt-1">
                                 นาที
                             </div>
                         </div>
@@ -371,7 +371,7 @@ export default function ControlPanel({
                     <button
                         onClick={simulateNavigation}
                         disabled={!distance || isRouting}
-                        className={`flex-1 py-2 sm:py-3 rounded-xl font-black text-[9px] sm:text-xs uppercase flex items-center justify-center gap-1.5 border-2 transition-all ${distance && !isRouting ? 'border-blue-500 text-blue-500 hover:bg-blue-50' : 'border-gray-200 text-gray-300'}`}
+                        className={`flex-1 py-2 sm:py-3 rounded-xl font-black text-[12px] sm:text-xs uppercase flex items-center justify-center gap-1.5 border-2 transition-all ${distance && !isRouting ? 'border-blue-500 text-blue-500 hover:bg-blue-50' : 'border-gray-200 text-gray-300'}`}
                     >
                         <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />

@@ -1,15 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import maplibregl from 'maplibre-gl';
 import { supabase } from '../../utils/supabaseClient';
 import { useWakeLock } from '../../hooks/useWakeLock';
 import { useNavigation } from '../../hooks/useNavigation';
 import { useRouting } from '../../hooks/useRouting';
 import { useTechnicianData } from '../../hooks/useTechnicianData';
 import { useCarStatusSimulator } from '../../hooks/useCarStatusSimulator';
-import { reverseGeocode, parseCoordinateUrl } from '../../utils/mapUtils';
+import { reverseGeocode, formatTime, parseCoordinateUrl } from '../../utils/mapUtils';
 import { speak } from '../../utils/voiceUtils';
 import { MAP_CONFIG } from '../../constants/visuals';
-import { calculateDistance, calculateRemainingDistance } from '../../utils/geoUtils';
-import { formatTime } from '../../utils/mapUtils';
+import { calculateDistance } from '../../utils/geoUtils';
 import NavigationOverlay from './technician/NavigationOverlay';
 import HUDOverlay from './technician/HUDOverlay';
 import ControlPanel from './technician/ControlPanel';
@@ -62,11 +62,13 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         if (sharedLocation && mapInstance) {
             if (sharedLocation.isMulti) {
                 setWaypoints(sharedLocation.coords);
-                mapInstance.fitBounds(sharedLocation.coords);
+                const bounds = new maplibregl.LngLatBounds();
+                sharedLocation.coords.forEach(p => bounds.extend([p[1], p[0]]));
+                mapInstance.fitBounds(bounds, { padding: 50 });
             } else {
                 const { lat, lng } = sharedLocation;
                 setStartPoint([lat, lng]);
-                mapInstance.setView([lat, lng], 16);
+                mapInstance.jumpTo({ center: [lng, lat], zoom: 16 });
             }
         }
     }, [sharedLocation, mapInstance]);
@@ -279,21 +281,10 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
 
     useWakeLock(isNavigating);
     useCarStatusSimulator(user, userProfile, isNavigating, currentSpeed, { eta, distance_remaining: remainingDistance });
-    const [liveDistance, setLiveDistance] = useState(null);
-    const [liveDuration, setLiveDuration] = useState(null);
-
-    useEffect(() => {
-        if (!isNavigating) {
-            setLiveDistance(distance);
-            setLiveDuration(totalDuration);
-            return;
-        }
-
-        const remainingMeters = calculateRemainingDistance(routePath, currentPointIndex);
-        setLiveDistance((remainingMeters / 1000).toFixed(2));
-        const estimatedSeconds = remainingMeters / 11.1;
-        setLiveDuration(formatTime(estimatedSeconds));
-    }, [isNavigating, distance, totalDuration, routePath, currentPointIndex]);
+   
+    const liveDistance = isNavigating ? (remainingDistance / 1000).toFixed(2) : distance;
+   
+    const liveDuration = isNavigating ? formatTime(remainingDistance / 11.1) : totalDuration;
 
     const handleOpenInvite = useCallback((ticket) => {
         setActiveInviteTicket(ticket);
@@ -490,8 +481,8 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         setAutoSnapPaused(false);
         setViewTarget({ coords: rawLocation, t: Date.now() });
         
-        if (nav && nav.syncMap) {
-            nav.syncMap(true);
+        if (nav && nav.syncMap && rawLocation) {
+            nav.syncMap(rawLocation[0], rawLocation[1], (rawHeading || 0), true);
         }
 
         showToast('จับตำแหน่งสำเร็จ', 'success');
@@ -635,7 +626,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
                             setAutoSnapPaused(false);
                             if (isNavigating && startPoint) {
                                 if (nav && nav.syncMap) {
-                                    nav.syncMap(true);
+                                    nav.syncMap(startPoint[0], startPoint[1], (currentHeading || 0), true);
                                 }
                             } else if (startPoint) {
                                 setViewTarget({ coords: startPoint, zoom: 17, t: Date.now() });

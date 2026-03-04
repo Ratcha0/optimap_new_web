@@ -107,4 +107,9 @@ export const calculateRemainingDistance = (routePath, startIndex) => {
     return total;
 };
 
-
+export const toLngLat = (coords) => {
+    if (!coords) return null;
+    if (Array.isArray(coords)) return [coords[1], coords[0]];
+    if (coords.lat !== undefined) return [coords.lng, coords.lat];
+    return null;
+};

@@ -20,8 +20,8 @@ export const useWakeLock = (active = false) => {
 
                     document.addEventListener('visibilitychange', handleVisibilityChange);
                 }
-            } catch (err) {
-           
+            } catch {
+                /* ignore */
             }
         };
 
@@ -29,7 +29,7 @@ export const useWakeLock = (active = false) => {
             if (wakeLockRef.current !== null && document.visibilityState === 'visible') {
                 try {
                     wakeLockRef.current = await navigator.wakeLock.request('screen');
-                } catch (e) { }
+                } catch { /* ignore */ }
             }
         };
 

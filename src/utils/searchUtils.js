@@ -146,7 +146,7 @@ export const performPlaceSearch = async (query, currentPosition) => {
                 return formattedResults;
             }
         }
-    } catch (error) {}
+    } catch { /* ignore */ }
 
     return [];
 };

@@ -12,8 +12,8 @@ import { AuthProvider } from './contexts/AuthContext.jsx'
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/service-worker.js')
-      .then(registration => {})
-      .catch(registrationError => {});
+      .then(() => {})
+      .catch(() => {});
   });
 }
 

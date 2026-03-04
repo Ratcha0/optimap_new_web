@@ -22,7 +22,6 @@ export const useNavigation = ({
     onLegComplete,
     is3D,
     onArrival,
-    setAutoSnapPaused,
     initialPointIndex = 0,
     initialLegIndex = 0
 }) => {
@@ -33,7 +32,8 @@ export const useNavigation = ({
     const [currentPointIndex, setCurrentPointIndex] = useState(initialPointIndex);
     const currentPosRef = useRef(null);
     const lastHeadingRef = useRef(0);
-    const lastSignalTimeRef = useRef(Date.now());
+    const lastSignalTimeRef = useRef(0);
+    useEffect(() => { lastSignalTimeRef.current = Date.now(); }, []);
     const lastRerouteTimeRef = useRef(0);
     const lastKnownSpeedRef = useRef(0);
     const offRouteCount = useRef(0);
@@ -56,8 +56,7 @@ export const useNavigation = ({
         checkVoiceGuidance,
         calculateETA,
         checkLegProgress,
-        resetGuidance,
-        activeLegRef
+        resetGuidance
     } = useGuidance({
         routePath, routeLegs, navigationSteps, speak, 
         setCurrentInstruction, onLegComplete, onArrival, initialLegIndex
@@ -78,9 +77,22 @@ export const useNavigation = ({
         setIsSimulating(false);
         setIsWaitingForContinue(false);
         isWaitingRef.current = false;
+        setCurrentPointIndex(0);
+        currentPointIndexRef.current = 0;
         if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
         stopSimulation();
     }, [stopSimulation]);
+
+ 
+    useEffect(() => {
+        if (!routePath || routePath.length === 0) {
+            setCurrentPointIndex(0);
+            currentPointIndexRef.current = 0;
+        } else if (!isNavigating && (!initialPointIndex || initialPointIndex === 0)) {
+            setCurrentPointIndex(0);
+            currentPointIndexRef.current = 0;
+        }
+    }, [routePath, isNavigating, initialPointIndex]);
 
     const startNavigation = useCallback((silent = false) => {
         if (!routePath || routePath.length === 0) return;

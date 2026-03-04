@@ -11,14 +11,14 @@ const geocodeCache = (function() {
     try {
         const saved = sessionStorage.getItem('optimap_geocode_cache');
         return saved ? new Map(JSON.parse(saved)) : new Map();
-    } catch(e) { return new Map(); }
+    } catch { return new Map(); }
 })();
 
 function saveGeocodeCache() {
     try {
         const entries = Array.from(geocodeCache.entries()).slice(-100); 
         sessionStorage.setItem('optimap_geocode_cache', JSON.stringify(entries));
-    } catch(e) {}
+    } catch { /* ignore */ }
 }
 
 let sessionRequestCount = 0;
@@ -53,7 +53,7 @@ export const reverseGeocode = async (lat, lng) => {
         saveGeocodeCache();
         
         return address;
-    } catch (e) {
+    } catch {
         return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     }
 };

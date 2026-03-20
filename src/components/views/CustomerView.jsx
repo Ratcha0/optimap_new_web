@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '../ui/ToastNotification';
 import { useCustomerData } from '../../hooks/useCustomerData';
-import { SEARCH_API } from '../../constants/api';
+
 import { MAP_CONFIG } from '../../constants/visuals';
 import { reverseGeocode, parseCoordinateUrl } from '../../utils/mapUtils';
 import { calculateDistance } from '../../utils/geoUtils';
@@ -18,12 +18,34 @@ import CustomerHeader from './customer/CustomerHeader';
 import CustomerMap from './customer/CustomerMap';
 import technicialcar from '../../assets/technicialcar.png';
 
+import { useGeolocation } from '../../hooks/useGeolocation';
+
 export default function CustomerView({ user, sharedLocation }) {
     const { showToast } = useToast();
+    const { location: rawLocation, accuracy: rawAccuracy } = useGeolocation(true);
     const [myPosition, setMyPosition] = useState(null);
     const [gpsAccuracy, setGpsAccuracy] = useState(null);
     const [mapInstance, setMapInstance] = useState(null);
     const [autoSnapPaused, setAutoSnapPaused] = useState(false);
+
+    const hasInitialGeocode = useRef(false);
+
+    const updateLocationName = useCallback(async (key, lat, lng) => {
+        const name = await reverseGeocode(lat, lng);
+        setLocationNames(prev => ({ ...prev, [key]: name }));
+    }, []);
+
+    useEffect(() => {
+        if (rawLocation) {
+            setMyPosition(rawLocation);
+            setGpsAccuracy(rawAccuracy);
+            
+            if (!hasInitialGeocode.current && rawLocation[0] && rawLocation[1]) {
+                hasInitialGeocode.current = true;
+                updateLocationName('start', rawLocation[0], rawLocation[1]);
+            }
+        }
+    }, [rawLocation, rawAccuracy, updateLocationName]);
 
     useEffect(() => {
         if (sharedLocation && mapInstance) {
@@ -51,6 +73,7 @@ export default function CustomerView({ user, sharedLocation }) {
     const [activeChatTicket, setActiveChatTicket] = useState(null);
     const [waypoints, setWaypoints] = useState([]);
     const mapRef = useRef(null);
+    const arrivalNotifiedRef = useRef(null);
     const defaultCenter = [13.7563, 100.5018];
 
     const {
@@ -74,21 +97,20 @@ export default function CustomerView({ user, sharedLocation }) {
     useEffect(() => {
         if (myPosition && waypoints.length > 0 && waypoints[0]) {
             const dest = waypoints[0];
+            const destKey = `${dest[0]},${dest[1]}`;
             const dist = calculateDistance(myPosition[0], myPosition[1], dest[0], dest[1]);
 
-            if (dist <= 10) {
-                setWaypoints([]);
+            if (dist <= 10 && arrivalNotifiedRef.current !== destKey) {
+                arrivalNotifiedRef.current = destKey;
                 const msg = 'คุณถึงที่หมายแล้วค่ะ';
                 showToast(`🏠 ${msg}`, 'success');
                 speak(msg);
+            } else if (dist > 10) {
+                arrivalNotifiedRef.current = null;
             }
         }
     }, [myPosition, waypoints, showToast]);
 
-    const updateLocationName = useCallback(async (key, lat, lng) => {
-        const name = await reverseGeocode(lat, lng);
-        setLocationNames(prev => ({ ...prev, [key]: name }));
-    }, []);
 
     const handleLocationSelect = useCallback((type, coords) => {
         if (type === 'start') {
@@ -140,42 +162,8 @@ export default function CustomerView({ user, sharedLocation }) {
         });
     }, [updateLocationName, mapInstance, showToast]);
 
-    useEffect(() => {
-        if (typeof window === 'undefined' || !navigator.geolocation) return;
+    // Standardized via useGeolocation hook
 
-        // Get initial position
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                const coords = [pos.coords.latitude, pos.coords.longitude];
-                setMyPosition(coords);
-                updateLocationName('start', coords[0], coords[1]);
-            },
-            null,
-            { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
-        );
-
-        // Watch position
-        const watchId = navigator.geolocation.watchPosition(
-            (pos) => {
-                const { latitude, longitude, accuracy } = pos.coords;
-                setMyPosition([latitude, longitude]);
-                setGpsAccuracy(accuracy);
-            },
-            (err) => {
-                if (err.code !== 3) {
-                    console.warn("Location watch error:", err.message);
-                    setGpsAccuracy(null);
-                }
-            },
-            { 
-                enableHighAccuracy: true, 
-                timeout: 20000, 
-                maximumAge: 1000 
-            }
-        );
-
-        return () => navigator.geolocation.clearWatch(watchId);
-    }, [updateLocationName]);
 
     const handleReportIssue = () => {
         if (!user) {

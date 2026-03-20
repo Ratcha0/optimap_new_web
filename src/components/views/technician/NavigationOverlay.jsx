@@ -87,36 +87,6 @@ export default function NavigationOverlay({
                 </div>
             )}
 
-            {isWaitingForContinue && (
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto flex items-center justify-center p-6 animate-in fade-in duration-500">
-                    <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center space-y-6 animate-in zoom-in-95 duration-300">
-                        <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
-                            <svg className="w-10 h-10 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-                            </svg>
-                        </div>
-                        <div>
-                            <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">ถึงจุดหมายแล้ว</h2>
-                            <p className="text-gray-500 font-medium mt-1">คุณเดินทางมาถึงพิกัดที่ระบุเรียบร้อยแล้ว</p>
-                        </div>
-                        <div className="pt-2 space-y-3">
-                            <button
-                                onClick={onContinueNavigation}
-                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl shadow-lg shadow-emerald-200 transition-all active:scale-95"
-                            >
-                                ดำเนินการต่อ
-                            </button>
-                            <button
-                                onClick={onStopNavigation}
-                                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-black py-4 rounded-2xl transition-all active:scale-95"
-                            >
-                                ปิดระบบนำทาง
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
         </div>
     );
 }

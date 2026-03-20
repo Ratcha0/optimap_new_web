@@ -1,16 +1,28 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { useToast } from '../components/ui/ToastNotification';
 import { useConnectionManager } from './useConnectionManager';
 
 
 import { retryOperation } from '../utils/retryUtils';
+import { speak } from '../utils/voiceUtils';
 
-export function useTechnicianData(user) {
+export function useTechnicianData(user, userProfile = null) {
     const [pendingJobsCount, setPendingJobsCount] = useState(0);
     const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
     const { showToast } = useToast();
     const { isOnline, queueUpdate } = useConnectionManager(user);
+    const isMountedRef = useRef(true);
+
+    const derivedVin = useMemo(() => {
+        if (!user?.id) return null;
+        return userProfile?.vin || `SIM-${user.id.substring(0, 8).toUpperCase()}`;
+    }, [user?.id, userProfile?.vin]);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => { isMountedRef.current = false; };
+    }, []);
 
     useEffect(() => {
 
@@ -24,37 +36,92 @@ export function useTechnicianData(user) {
                     .eq('status', 'pending');
 
                 if (error) throw error;
-                setPendingJobsCount(count || 0);
+                if (isMountedRef.current) setPendingJobsCount(count || 0);
             });
+        };
+
+        const debounceRef = { timer: null };
+        const debouncedFetch = () => {
+            if (debounceRef.timer) clearTimeout(debounceRef.timer);
+            debounceRef.timer = setTimeout(fetchPendingCount, 1500);
         };
 
         fetchPendingCount();
 
-        const channel = supabase
-            .channel('pending_jobs_count')
-            .on('postgres_changes',
-                { event: '*', schema: 'public', table: 'support_tickets' },
-                () => fetchPendingCount()
-            )
-            .subscribe();
+        let channel = null;
+        let msgChannel = null;
 
-        const msgChannel = supabase
-            .channel('tech_messages_count')
-            .on('postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'ticket_messages' },
-                (payload) => {
+        const subTimeout = setTimeout(() => {
+            if (!isMountedRef.current || !user?.id) return;
 
-                    if (payload.new.sender_id !== user.id && !payload.new.is_system) {
-                        setUnreadMessagesCount(prev => prev + 1);
-                        showToast('คุณมีข้อความใหม่', 'info');
+            channel = supabase
+                .channel('pending_jobs_count')
+                .on('postgres_changes',
+                    { event: 'INSERT', schema: 'public', table: 'support_tickets' },
+                    (payload) => {
+                        debouncedFetch();
+                        if (payload.new.status === 'pending') {
+                            showToast('มีรายการแจ้งซ่อมใหม่เข้ามา!', 'info');
+                            try { speak("มีรายการแจ้งซ่อมใหม่เข้ามาค่ะ"); } catch(e){}
+                        }
                     }
-                }
-            )
-            .subscribe();
+                )
+                .on('postgres_changes',
+                    { event: 'UPDATE', schema: 'public', table: 'support_tickets' },
+                    (payload) => {
+                        if (payload.new.status !== payload.old.status) debouncedFetch();
+                    }
+                );
+            
+            channel.subscribe();
+
+           
+            msgChannel = supabase
+                .channel(`tech-messages-${user.id}`)
+                .on('postgres_changes',
+                    { event: 'INSERT', schema: 'public', table: 'ticket_messages' },
+                    async (payload) => {
+                   
+                        if (payload.new.sender_id === user.id || payload.new.is_system) return;
+
+                      
+                        const { data: ticket } = await supabase
+                            .from('support_tickets')
+                            .select('id, technician_id')
+                            .eq('id', payload.new.ticket_id)
+                            .maybeSingle();
+
+               
+                        const isPrimary = ticket?.technician_id === user.id;
+
+                        let isAssigned = false;
+                        if (!isPrimary) {
+                            const { data: assign } = await supabase
+                                .from('ticket_assignments')
+                                .select('id')
+                                .eq('ticket_id', payload.new.ticket_id)
+                                .eq('technician_id', user.id)
+                                .eq('status', 'accepted')
+                                .maybeSingle();
+                            isAssigned = !!assign;
+                        }
+
+                        if (isPrimary || isAssigned) {
+                            setUnreadMessagesCount(prev => prev + 1);
+                            showToast('คุณมีข้อความใหม่ในงานที่ดูแล', 'info');
+                            try { speak("มีข้อความใหม่เข้ามาค่ะ"); } catch(e){}
+                        }
+                    }
+                );
+            
+            msgChannel.subscribe();
+        }, 800);
 
         return () => {
-            supabase.removeChannel(channel);
-            supabase.removeChannel(msgChannel);
+            clearTimeout(subTimeout);
+            if (debounceRef.timer) clearTimeout(debounceRef.timer);
+            if (channel) supabase.removeChannel(channel);
+            if (msgChannel) supabase.removeChannel(msgChannel);
         };
     }, [user?.id, showToast]);
 
@@ -74,36 +141,76 @@ export function useTechnicianData(user) {
     };
 
     useEffect(() => {
-        if (!user?.id) return;
+        if (!derivedVin) return;
 
         const fetchCarStatus = async () => {
              await retryOperation(async () => {
                 const { data, error } = await supabase
                     .from('car_status')
                     .select('*')
-                    .eq('id', user.id)
+                    .eq('vin', derivedVin)
                     .maybeSingle();
                 
                 if (error) throw error;
-                if (data) setCarStatus(validateCarStatus(data));
+                if (data && isMountedRef.current) setCarStatus(validateCarStatus(data));
             });
         };
 
         fetchCarStatus();
 
-        const statusChannel = supabase.channel(`my-status-${user.id}`)
-            .on('postgres_changes',
-                { event: '*', schema: 'public', table: 'car_status', filter: `id=eq.${user.id}` },
-                (payload) => {
-                    const newData = payload.new || payload.old;
-                    if (newData) {
-                        setCarStatus(prev => validateCarStatus({ ...prev, ...newData }));
-                    }
-                }
-            ).subscribe();
+        let statusChannel = null;
 
-        return () => supabase.removeChannel(statusChannel);
-    }, [user?.id]);
+        const subTimeout = setTimeout(() => {
+            if (!isMountedRef.current || !derivedVin) return;
+
+            statusChannel = supabase.channel(`my-status-${derivedVin}`)
+                .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'car_status', filter: `vin=eq.${derivedVin}` },
+                    (payload) => {
+                        const newData = payload.new || payload.old;
+                        if (newData) {
+                            setCarStatus(prev => validateCarStatus({ ...prev, ...newData }));
+                        }
+                    }
+                );
+            
+            statusChannel.subscribe();
+        }, 1000);
+
+        return () => {
+            clearTimeout(subTimeout);
+            if (statusChannel) supabase.removeChannel(statusChannel);
+        };
+    }, [derivedVin]);
+
+    const logLocation = useCallback(async (coords) => {
+        if (!user?.id) return; 
+        
+        if (!coords || isNaN(coords[0]) || isNaN(coords[1])) {
+            console.error('Invalid coordinates for logging:', coords);
+            return;
+        }
+        
+        try {
+            const { error } = await supabase.from('location_logs').insert({
+                technician_id: user.id,
+                lat: parseFloat(coords[0]),
+                lng: parseFloat(coords[1]),
+                speed: 0,
+                heading: 0
+            });
+            
+            if (error) {
+                console.error('Supabase error logging location:', error);
+                throw error;
+            }
+            
+            showToast('บันทึกตำแหน่ง Check-in เรียบร้อย', 'success');
+        } catch (e) {
+            console.error('Failed to log location event fully:', e);
+            showToast(`บันทึกไม่สำเร็จ: ${e.message || 'ปัญหาด้านสิทธิ์การเข้าถึง'}`, 'error');
+        }
+    }, [user?.id, showToast]);
 
     const syncPosition = useCallback(async (coords) => {
         if (!user?.id || !coords) return;
@@ -132,7 +239,8 @@ export function useTechnicianData(user) {
         unreadMessagesCount,
         setUnreadMessagesCount,
         syncPosition,
+        logLocation,
         carStatus,
         isOnline
     };
-}
+};

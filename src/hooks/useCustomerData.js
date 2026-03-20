@@ -53,14 +53,13 @@ export function useCustomerData(user) {
             }
 
             
-            const { data, error: profileError } = await supabase
-                .from('profiles')
-                .select(`
-                    id, full_name, last_lat, last_lng, avatar_url, phone, team_name, car_reg,
-                    car_status(engine_temp, battery_volt, water_level, fuel_level, oil_level, vehicle_speed, odometer, engine_status)
-                `)
-                .in('id', allTechIds)
-                .not('last_lat', 'is', null);
+            const [{ data, error: profileError }, { data: allCarStatus }] = await Promise.all([
+                supabase.from('profiles')
+                    .select('id, full_name, last_lat, last_lng, avatar_url, phone, team_name, car_reg, vin')
+                    .in('id', allTechIds)
+                    .not('last_lat', 'is', null),
+                supabase.from('car_status').select('*')
+            ]);
             
             if (profileError) throw profileError;
 
@@ -75,8 +74,16 @@ export function useCustomerData(user) {
                         if (assignment) ticketId = assignment.ticket_id;
                     }
 
+                    // Manual join by VIN (with fallback for simulation and legacy ID matching)
+                    const derivedVin = profile.vin || `SIM-${profile.id.substring(0, 8).toUpperCase()}`;
+                    let carStatus = allCarStatus?.find(cs => cs.vin === derivedVin);
+                    if (!carStatus) {
+                        carStatus = allCarStatus?.find(cs => cs.id === profile.id);
+                    }
+
                     return {
                         ...profile,
+                        car_status: carStatus ? [carStatus] : [],
                         is_primary: primaryTechIds.includes(profile.id),
                         active_ticket_id: ticketId
                     };
@@ -97,9 +104,43 @@ export function useCustomerData(user) {
     useEffect(() => {
         fetchTechs();
         fetchProfile();
-        const interval = setInterval(fetchTechs, 5000);
-        return () => clearInterval(interval);
-    }, [fetchTechs, fetchProfile]);
+
+        let profileChannel = null;
+        let statusChannel = null;
+
+      
+        const debounceFetch = () => {
+            const timeoutId = setTimeout(fetchTechs, 1000);
+            return () => clearTimeout(timeoutId);
+        };
+
+        const subTimeout = setTimeout(() => {
+            if (!user) return;
+            profileChannel = supabase.channel('customer-tech-tracking')
+                .on('postgres_changes', 
+                    { event: 'UPDATE', schema: 'public', table: 'profiles' },
+                    (payload) => {
+                        
+                        fetchTechs();
+                    }
+                )
+                .subscribe();
+
+            
+            statusChannel = supabase.channel('customer-tech-car-status')
+                .on('postgres_changes',
+                    { event: 'UPDATE', schema: 'public', table: 'car_status' },
+                    () => fetchTechs()
+                )
+                .subscribe();
+        }, 1000);
+
+        return () => {
+            clearTimeout(subTimeout);
+            if (profileChannel) supabase.removeChannel(profileChannel);
+            if (statusChannel) supabase.removeChannel(statusChannel);
+        };
+    }, [fetchTechs, fetchProfile, user?.id]);
 
     const submitTicket = useCallback(async (ticketData, firebaseData = null) => {
         try {

@@ -11,6 +11,14 @@ export function useTeamManager(user, setViewMode) {
     
     const dismissedInvitesRef = useRef(new Set(JSON.parse(localStorage.getItem('dismissed_invites') || '[]')));
     const pendingInviteRef = useRef(null);
+    const lastSpokenInviteIdRef = useRef(null);
+    const syncTimeoutRef = useRef(null);
+    const isMountedRef = useRef(true);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => { isMountedRef.current = false; };
+    }, []);
 
     useEffect(() => {
         pendingInviteRef.current = pendingInvite;
@@ -39,15 +47,14 @@ export function useTeamManager(user, setViewMode) {
             const leadTechIds = activeJobs?.map(j => j.technician_id) || [];
             const relevantTechIds = [...new Set([...assignedTechIds, ...leadTechIds])];
 
-            const { data: profiles } = await supabase
-                .from('profiles')
-                .select(`
-                    id, full_name, last_lat, last_lng, avatar_url, role, last_updated, phone, team_name, car_reg,
-                    car_status(engine_temp, battery_volt, water_level, fuel_level, oil_level, vehicle_speed, odometer, engine_status)
-                `)
-                .eq('role', 'technician')
-                .neq('id', user.id)
-                .or(`last_updated.gte.${thirtyMinsAgo},id.in.("${relevantTechIds.join('","')}")`);
+            const [{ data: profiles }, { data: allCarStatus }] = await Promise.all([
+                supabase.from('profiles')
+                    .select('id, full_name, last_lat, last_lng, avatar_url, role, last_updated, phone, team_name, car_reg, vin')
+                    .eq('role', 'technician')
+                    .neq('id', user.id)
+                    .or(`last_updated.gte.${thirtyMinsAgo},id.in.("${relevantTechIds.join('","')}")`),
+                supabase.from('car_status').select('*')
+            ]);
 
             if (!profiles) return;
 
@@ -56,19 +63,25 @@ export function useTeamManager(user, setViewMode) {
                 const acceptedAssign = allAssignments?.find(a => a.technician_id === tech.id && a.status === 'accepted');
                 const anyAssign = allAssignments?.find(a => a.technician_id === tech.id);
                 
+                // Manual join by VIN with ID fallback
+                const derivedVin = tech.vin || `SIM-${tech.id.substring(0, 8).toUpperCase()}`;
+                let carStatus = allCarStatus?.find(cs => cs.vin === derivedVin);
+                if (!carStatus) {
+                    carStatus = allCarStatus?.find(cs => cs.id === tech.id);
+                }
+
                 return {
                     ...tech,
+                    car_status: carStatus ? [carStatus] : [],
                     active_ticket_id: headJob?.id || acceptedAssign?.ticket_id || null,
                     is_primary: !!headJob || acceptedAssign?.role === 'primary' || acceptedAssign?.role === 'technician',
                     assignment_status: headJob ? 'active' : (anyAssign?.status || 'none')
                 };
             });
 
-            setOtherTechs(processedData);
-        } catch {
-            /* ignore */
-        }
-    }, [user]);
+            if (isMountedRef.current) setOtherTechs(processedData);
+        } catch { }
+    }, [user?.id]);
 
     const fetchMyAssignment = useCallback(async () => {
         if (!user) return;
@@ -93,15 +106,15 @@ export function useTeamManager(user, setViewMode) {
             
             const active = myAssignments?.find(a => a.status === 'accepted') || myAssignments?.[0];
             
-            setMyAssignment({
-                ticket_id: active?.ticket_id || null,
-                is_primary: active?.role === 'primary' || active?.role === 'technician',
-                status: active?.status || 'none'
-            });
-        } catch {
-            /* ignore */
-        }
-    }, [user]);
+            if (isMountedRef.current) {
+                setMyAssignment({
+                    ticket_id: active?.ticket_id || null,
+                    is_primary: active?.role === 'primary' || active?.role === 'technician',
+                    status: active?.status || 'none'
+                });
+            }
+        } catch { }
+    }, [user?.id]);
 
     const fetchInviteDetails = useCallback(async (assignment) => {
         if (dismissedInvitesRef.current.has(assignment.id)) return;
@@ -128,10 +141,11 @@ export function useTeamManager(user, setViewMode) {
             };
 
             setPendingInvite(inviteData);
-            speak(`คุณ ${inviteData.sender_name} ชวนคุณเข้าร่วมทีมงาน ${ticketData?.issue_type || ''} ค่ะ`);
-        } catch {
-          /* ignore */
-        }
+            if (lastSpokenInviteIdRef.current !== assignment.id) {
+                lastSpokenInviteIdRef.current = assignment.id;
+                speak(`คุณ ${inviteData.sender_name} ชวนคุณเข้าร่วมทีมงาน ${ticketData?.issue_type || ''} ค่ะ`);
+            }
+        } catch { }
     }, []);
 
     const checkPendingInvite = useCallback(async () => {
@@ -159,9 +173,7 @@ export function useTeamManager(user, setViewMode) {
                     fetchInviteDetails(latestInvite);
                 }
             }
-        } catch {
-            /* ignore */
-        }
+        } catch { }
     }, [user?.id, fetchInviteDetails]);
 
     const handleAcceptInvite = async () => {
@@ -199,13 +211,11 @@ export function useTeamManager(user, setViewMode) {
                 .from('ticket_assignments')
                 .delete()
                 .eq('id', inviteId);
-        } catch {
-            /* ignore */
-        }
+        } catch { }
     };
 
     useEffect(() => {
-        if (!user) return;
+        if (!user?.id) return;
 
         fetchOtherTechs();
         fetchMyAssignment();
@@ -213,41 +223,60 @@ export function useTeamManager(user, setViewMode) {
 
         const pollInterval = setInterval(checkPendingInvite, 10000);
 
-        const inviteChannel = supabase.channel(`team-invites-${user.id}`)
-            .on('postgres_changes', 
-                { event: 'INSERT', schema: 'public', table: 'ticket_assignments' }, 
-                async (payload) => {
-                    if (payload.new.technician_id === user.id && payload.new.status === 'pending') {
-                        const { data: ticket } = await supabase
-                            .from('support_tickets')
-                            .select('status')
-                            .eq('id', payload.new.ticket_id)
-                            .single();
-                        
-                        if (ticket && !['completed', 'canceled'].includes(ticket.status)) {
-                            fetchInviteDetails(payload.new);
+        const debounceSync = () => {
+            if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+            syncTimeoutRef.current = setTimeout(() => {
+                fetchOtherTechs();
+                fetchMyAssignment();
+            }, 2000);
+        };
+
+        let inviteChannel = null;
+        let dataSyncChannel = null;
+
+
+        const subTimeout = setTimeout(() => {
+            if (!isMountedRef.current || !user?.id) return;
+
+            inviteChannel = supabase.channel(`team-invites-${user.id}`)
+                .on('postgres_changes', 
+                    { event: 'INSERT', schema: 'public', table: 'ticket_assignments' }, 
+                    async (payload) => {
+                        if (payload.new.technician_id === user.id && payload.new.status === 'pending') {
+                            const { data: ticket } = await supabase
+                                .from('support_tickets')
+                                .select('status')
+                                .eq('id', payload.new.ticket_id)
+                                .single();
+                            
+                            if (ticket && !['completed', 'canceled'].includes(ticket.status)) {
+                                fetchInviteDetails(payload.new);
+                            }
                         }
                     }
+                );
+            
+            inviteChannel.subscribe((status) => {
+                if (status === 'CHANNEL_ERROR') {
+                    console.warn('Realtime channel error for invites, will retry on next mount');
                 }
-            ).subscribe();
+            });
 
-        const dataSyncChannel = supabase.channel('team-data-sync')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchOtherTechs())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'car_status' }, () => fetchOtherTechs())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_assignments' }, () => {
-                fetchOtherTechs();
-                fetchMyAssignment();
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, () => {
-                fetchOtherTechs();
-                fetchMyAssignment();
-            })
-            .subscribe();
+            dataSyncChannel = supabase.channel('team-data-sync')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, debounceSync)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'car_status' }, debounceSync)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_assignments' }, debounceSync)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, debounceSync);
+            
+            dataSyncChannel.subscribe();
+        }, 500);
 
         return () => {
-            if (inviteChannel) supabase.removeChannel(inviteChannel);
-            if (dataSyncChannel) supabase.removeChannel(dataSyncChannel);
+            clearTimeout(subTimeout);
             clearInterval(pollInterval);
+            if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+            if (inviteChannel) supabase.removeChannel(inviteChannel).catch(() => {});
+            if (dataSyncChannel) supabase.removeChannel(dataSyncChannel).catch(() => {});
         };
     }, [user?.id, fetchOtherTechs, fetchMyAssignment, checkPendingInvite, fetchInviteDetails]);
 

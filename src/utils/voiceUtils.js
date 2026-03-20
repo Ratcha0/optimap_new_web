@@ -43,9 +43,9 @@ const playChime = () => {
         };
 
         const now = ctx.currentTime;
-        playNote(783.99, now, 0.15, 0.2);        // Note 1: Low-Mid
-        playNote(987.77, now + 0.06, 0.12, 0.22); // Note 2: Mid
-        playNote(1318.51, now + 0.12, 0.18, 0.25); // Note 3: High (Bright finish)
+        playNote(783.99, now, 0.15, 0.2);       
+        playNote(987.77, now + 0.06, 0.12, 0.22); 
+        playNote(1318.51, now + 0.12, 0.18, 0.25); 
     } catch { /* ignore */ }
 };
 

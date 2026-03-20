@@ -155,30 +155,28 @@ maptiler ค้นหาสถานที่
 
 *เราไม่สามารถ build โหลดครั้งเดียวได้เนื่องจากข้อจำกัดของ hugging face ทำให้ build ไม่เสร็จ ระบบจะไม่สามารถใช้งานได้
 
-# Stage 1: โหลดแผนที่ประเทศไทย (304 MB)
-FROM alpine:latest AS downloader
-RUN apk add --no-cache curl
-WORKDIR /data
-RUN curl -fL -A "Mozilla/5.0" -o map.pbf https://download.geofabrik.de/asia/thailand-latest.osm.pbf
 
-# Stage 2: รัน OSRM
-FROM osrm/osrm-backend:latest
-WORKDIR /osrm-data
-COPY --from=downloader /data/map.pbf ./map.pbf
 
-USER root
-RUN chown -R 1000:1000 /osrm-data
-USER 1000
+    สิ่งที่ต้องทำเพิ่มเติม
+    1.Auto-Continue way point ถ้าขับออกจากจุดหมายไปแล้ว ให้ระบบทำการหาเส้นทางใหม่ไปยังจุดหมายถัดไปโดยอัตโนมัติ
+    2.Auto-snap paused
+    3.Smart Proximity Notification (แจ้งเตือนลูกค้าอัตโนมัติเมื่อเวลาเดินทางเหลืออีก 5-8 นาที หรือ ETA)
+    4.Technician Journey Overview (ดูภาพรวมเส้นทาง): แสดงประวัติการเดินทาง "ทั้งหมด" ของช่างแต่ละคน พร้อมระบบค้นหาอัจฉริยะ (วันที่/สถานที่) เพื่อให้แอดมินเห็นพฤติกรรมการวิ่งงานในเชิงภาพรวมได้ชัดเจน
+    ลองนึกภาพ UX (User Experience) แบบนี้ครับ:
+หน้าแอดมิน (จัดการช่าง): เห็นลิสต์รายชื่อช่างพร้อมสถานะ (เหมือนที่เห็นตอนนี้)
+เมื่อคลิกที่ช่างคนนั้น: ระบบจะนำเข้าไปสู่อีกหน้าหนึ่งที่เป็นของช่างคนนั้นโดยเฉพาะ
+ภายในหน้านั้น:
+มี ปฏิทิน (Date Picker) ให้เลือกวันที่
+เมื่อเลือกวันปุ๊บ แผนที่ด้านข้าง จะวาดเส้นทางการเดินทางของวันนั้นขึ้นมาทันที
+ด้านล่างแผนที่เป็น สรุปเหตุการณ์ (Timeline) เช่น:
+08:00 - เริ่มออกเดินทาง
+09:30 - ถึงบ้านลูกค้า A (ใช้เวลา 1 ชม.)
+10:30 - เดินทางต่อไปยังบ้านลูกค้า B
 
-ENTRYPOINT []
-EXPOSE 7860
 
-# --- สั่งรันเรียงลำดับ (ใช้ 1 Thread เพื่อให้แรม 16GB ไม่ล้น) ---
-# ขั้นตอนนี้จะใช้เวลาประมาณ 15-20 นาทีในหน้า Logs นะครับ
-CMD echo "--- [1/3] EXTRACTING THAILAND (PLEASE WAIT 15 MIN) ---" && \
-    osrm-extract -p /opt/car.lua map.pbf --threads 1 && \
-    echo "--- [2/3] PREPARING ROUTES (THREADS:1) ---" && \
-    osrm-partition map.osrm --threads 1 && \
-    osrm-customize map.osrm --threads 1 && \
-    echo "--- [3/3] THAILAND SERVER ONLINE! ---" && \
-    osrm-routed --algorithm mld map.osrm --port 7860
+พรุ่งนี้ทำ 
+ปรับขนาดของแผนที่ให้เต็มหน้าจอหน้าประวัติการเดินทาง
+The map grid fills the entire screen on the travel history page.
+
+หน้า admin เอาส่วนของ งานทั้งหมด ออกมันซ้ำกับติดตามสถานะงาน
+

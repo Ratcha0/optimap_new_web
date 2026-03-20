@@ -26,16 +26,24 @@ export default function LiveTrackModal({ isOpen, onClose, trip }) {
         if (!isOpen || !trip?.technician_id) return;
 
         const fetchData = async () => {
-            const { data: mainTech } = await supabase
-                .from('profiles')
-                .select(`
-                    last_lat, last_lng, full_name, avatar_url, team_name, car_reg, phone,
-                    car_status(engine_temp, battery_volt, water_level, fuel_level, oil_level, vehicle_speed, odometer, engine_status, last_updated)
-                `)
-                .eq('id', trip.technician_id)
-                .single();
+            const [{ data: mainTech, error: techErr }, { data: allCarStatus }] = await Promise.all([
+                supabase.from('profiles')
+                    .select('*')
+                    .eq('id', trip.technician_id)
+                    .single(),
+                supabase.from('car_status').select('*')
+            ]);
+            
+            if (techErr) console.error("LiveTrackModal Error:", techErr);
 
-            if (mainTech) setTechLocation(mainTech);
+            if (mainTech) {
+                const derivedVin = mainTech.vin || `SIM-${trip.technician_id.substring(0, 8).toUpperCase()}`;
+                let carStatus = allCarStatus?.find(cs => cs.vin === derivedVin);
+                if (!carStatus) {
+                    carStatus = allCarStatus?.find(cs => cs.id === trip.technician_id);
+                }
+                setTechLocation({ ...mainTech, car_status: carStatus || null });
+            }
 
             const { data: assignments } = await supabase
                 .from('ticket_assignments')
@@ -61,8 +69,18 @@ export default function LiveTrackModal({ isOpen, onClose, trip }) {
             ).subscribe();
 
         const statusSub = supabase.channel(`live-status-${trip.technician_id}`)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'car_status', filter: `id=eq.${trip.technician_id}` },
-                (p) => setTechLocation(prev => prev ? ({ ...prev, car_status: p.new || p.old }) : null)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'car_status' },
+                (p) => {
+                    const newData = p.new || p.old;
+                    setTechLocation(prev => {
+                        if (!prev) return null;
+                        const derivedVin = prev.vin || `SIM-${trip.technician_id.substring(0, 8).toUpperCase()}`;
+                        if (newData?.vin === derivedVin || newData?.id === trip.technician_id) {
+                            return { ...prev, car_status: newData };
+                        }
+                        return prev;
+                    });
+                }
             ).subscribe();
 
         return () => {
@@ -79,17 +97,23 @@ export default function LiveTrackModal({ isOpen, onClose, trip }) {
             style: {
                 version: 8,
                 sources: {
-                    'osm': {
+                    'carto-voyager': {
                         type: 'raster',
-                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-                        tileSize: 256
+                        tiles: ['https://a.tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap contributors © CARTO'
                     }
                 },
-                layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
+                layers: [{ id: 'carto-voyager', type: 'raster', source: 'carto-voyager' }]
             },
             center: [trip.lng, trip.lat],
-            zoom: 13
+            zoom: 13,
+            maxZoom: 19
         });
+
+        setTimeout(() => {
+            if (map.current) map.current.resize();
+        }, 100);
 
         map.current.on('load', () => {
             map.current.addSource('line', {
@@ -132,9 +156,13 @@ export default function LiveTrackModal({ isOpen, onClose, trip }) {
     }, [trip]);
 
     useEffect(() => {
-        if (!map.current || !techLocation?.last_lat) return;
+        const carStatusData = Array.isArray(techLocation?.car_status) ? techLocation?.car_status[0] : techLocation?.car_status;
+        const currentLat = carStatusData?.lat || techLocation?.last_lat;
+        const currentLng = carStatusData?.lng || techLocation?.last_lng;
 
-        const pos = [techLocation.last_lng, techLocation.last_lat];
+        if (!map.current || currentLat === undefined) return;
+
+        const pos = [currentLng, currentLat];
         
         if (!markersRef.current.tech) {
             const el = document.createElement('div');
@@ -166,7 +194,7 @@ export default function LiveTrackModal({ isOpen, onClose, trip }) {
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[11000] flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-4xl h-[80vh] rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="bg-white w-full max-w-6xl h-[90vh] rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-white relative z-20">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600">
@@ -184,7 +212,8 @@ export default function LiveTrackModal({ isOpen, onClose, trip }) {
                     </button>
                 </div>
 
-                <div className="flex-1 relative">
+                <div className="flex-1 flex flex-col lg:flex-row min-h-0 relative">
+                    <div className="flex-none h-[40vh] lg:h-auto lg:flex-1 relative">
                     <div ref={mapContainer} className="w-full h-full" />
                     {loading && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-10">
@@ -193,9 +222,9 @@ export default function LiveTrackModal({ isOpen, onClose, trip }) {
                         </div>
                     )}
                     
-                    {!loading && techLocation?.last_lat && (
+                    {!loading && (carStatusData?.lat || techLocation?.last_lat) && (
                         <button
-                            onClick={() => map.current?.flyTo({ center: [techLocation.last_lng, techLocation.last_lat], zoom: 17, duration: 1500 })}
+                            onClick={() => map.current?.flyTo({ center: [carStatusData?.lng || techLocation.last_lng, carStatusData?.lat || techLocation.last_lat], zoom: 17, duration: 1500 })}
                             className="absolute top-6 right-6 z-[1000] w-12 h-12 bg-white rounded-2xl shadow-2xl flex items-center justify-center border-2 border-blue-500 hover:bg-blue-50 transition-all active:scale-95 group"
                         >
                             <img src={technicialcar} className="w-9 h-9 object-contain filter drop-shadow-md" />
@@ -203,30 +232,36 @@ export default function LiveTrackModal({ isOpen, onClose, trip }) {
                     )}
                 </div>
 
-                {techLocation && (
-                    <div className="p-6 bg-white border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-6 relative z-20 overflow-y-auto max-h-[30vh]">
-                        <div className="flex items-center gap-4">
-                            <img 
-                                src={techLocation.avatar_url || `https://ui-avatars.com/api/?name=${techLocation.full_name}&background=0D8ABC&color=fff`}
-                                className="w-16 h-16 rounded-2xl object-cover shadow-lg border-2 border-blue-500" 
-                            />
-                            <div>
-                                <div className="text-xs font-black text-blue-500 uppercase tracking-widest mb-1">ช่างเทคนิคยันต์อาสา</div>
-                                <div className="text-lg font-black text-gray-900 leading-none">{techLocation.full_name}</div>
-                                <div className="text-xs text-gray-400 font-bold mt-1">{techLocation.car_reg} • {techLocation.team_name}</div>
-                                {techLocation.phone && (
-                                    <a href={`tel:${techLocation.phone}`} className="mt-2 inline-flex items-center gap-2 bg-green-500 text-white px-4 py-1.5 rounded-xl text-xs font-black hover:bg-green-600 transition-all no-underline">
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                                        โทรหาช่าง
-                                    </a>
-                                )}
+                    {techLocation && (
+                        <div className="flex-1 lg:flex-none w-full lg:w-[400px] xl:w-[420px] p-4 lg:p-5 bg-gray-50/50 border-t lg:border-t-0 lg:border-l border-gray-100 flex flex-col gap-4 relative z-20 overflow-y-auto">
+                            <div className="flex items-center gap-3 bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+                                <img 
+                                    src={techLocation.avatar_url || `https://ui-avatars.com/api/?name=${techLocation.full_name}&background=0D8ABC&color=fff`}
+                                    className="w-16 h-16 rounded-2xl object-cover shadow-lg border-2 border-blue-500" 
+                                />
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="text-xs font-black text-blue-500 uppercase tracking-widest">ช่างเทคนิค</div>
+                                    </div>
+                                    <div className="text-lg font-black text-gray-900 leading-none">{techLocation.full_name}</div>
+                                    <div className="text-xs text-gray-400 font-bold mt-1">{techLocation.car_reg} • {techLocation.team_name}</div>
+                                    <div className="text-[10px] text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full inline-block font-mono mt-1 5">
+                                        พิกัด GPS: {carStatusData?.lat || 'ไม่มีข้อมูล'} , {carStatusData?.lng || 'ไม่มีข้อมูล'}
+                                    </div>
+                                    {techLocation.phone && (
+                                        <a href={`tel:${techLocation.phone}`} className="mt-2 inline-flex items-center gap-2 bg-green-500 text-white px-4 py-1.5 rounded-xl text-xs font-black hover:bg-green-600 transition-all no-underline">
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                            โทรหาช่าง
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="bg-white rounded-3xl p-4 border border-gray-100 shadow-sm">
+                                 <VehicleStatusDashboard carStatus={carStatusData} />
                             </div>
                         </div>
-                        <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                             <VehicleStatusDashboard carStatus={carStatusData} isCollapsible={true} />
-                        </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );

@@ -6,6 +6,7 @@ import { EXTERNAL_LINKS } from '../../../constants/api';
 import { useToast } from '../../ui/ToastNotification';
 import technicialcar from '../../../assets/technicialcar.png';
 import { createRoot } from 'react-dom/client';
+
 import { calculateDistance, toLngLat } from '../../../utils/geoUtils';
 
 import TechnicianPopupContent from '../../map/TechnicianPopupContent';
@@ -440,7 +441,7 @@ const TechnicianMap = React.memo(({
         };
     }, [routePath, isNavigating, currentPointIndex, routeLegs, currentLegIndex, isMapReady, startPoint ? startPoint.toString() : '']);
 
-    // Branch markers are now handled via BranchMarkers component in the JSX return
+ 
 
     const allTechs = useMemo(() => {
         const list = [...otherTechs];
@@ -506,7 +507,14 @@ const TechnicianMap = React.memo(({
                 const popupNode = document.createElement('div');
                 popupNode.className = 'custom-popup-premium';
                 const root = createRoot(popupNode);
-                const popup = new maplibregl.Popup({ offset: 25, maxWidth: '300px', className: 'rounded-2xl' }).setDOMContent(popupNode);
+                const isMobile = window.innerWidth < 768;
+                const popup = new maplibregl.Popup({ 
+                    offset: 25, 
+                    maxWidth: 'none', 
+                    className: 'custom-vehicle-popup',
+                    autoPan: false,
+                    anchor: isMobile ? 'bottom' : 'left'
+                }).setDOMContent(popupNode);
                 
                 const marker = new maplibregl.Marker({ 
                     element: el,
@@ -516,15 +524,25 @@ const TechnicianMap = React.memo(({
                 
                 popup.on('open', () => {
                     onMapInteract?.('start');
-                    root.render(<TechnicianPopupContent tech={tech} allTechs={allTechs} onMapInteract={onMapInteract} />);
+                    setTimeout(() => {
+                        const isMobile = window.innerWidth < 768;
+                        if (map.current) {
+                            map.current.easeTo({
+                                center: pos,
+                                offset: isMobile ? [0, 280] : [-150, 0],
+                                duration: 400
+                            });
+                        }
+                    }, 50);
                 });
+                root.render(<TechnicianPopupContent tech={tech} allTechs={allTechs} onMapInteract={onMapInteract} />);
                 markersRef.current.techs[tech.id] = { marker, root, popupNode, techData: JSON.stringify(tech) };
             } else {
                 const e = markersRef.current.techs[tech.id];
                 e.marker.setLngLat(pos);
                 const p = e.marker.getPopup();
                 const techStr = JSON.stringify(tech);
-                if (p.isOpen() && e.techData !== techStr) {
+                if (e.techData !== techStr) {
                     e.root.render(<TechnicianPopupContent tech={tech} allTechs={allTechs} onMapInteract={onMapInteract} />);
                     e.techData = techStr;
                 }
@@ -586,14 +604,21 @@ const TechnicianMap = React.memo(({
                 </div>
             )}
             <style>{`
-                .maplibregl-popup {
+                .custom-vehicle-popup {
                     z-index: 5000 !important;
+                    max-width: none !important;
                 }
-                .maplibregl-popup-content {
+                .custom-vehicle-popup .maplibregl-popup-content {
                     padding: 0 !important;
                     border-radius: 20px !important;
                     overflow: hidden;
                     box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
+                    width: 320px;
+                }
+                @media (min-width: 768px) {
+                    .custom-vehicle-popup .maplibregl-popup-content {
+                        width: 450px !important;
+                    }
                 }
                 .maplibregl-popup-close-button {
                     width: 24px;

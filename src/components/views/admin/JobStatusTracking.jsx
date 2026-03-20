@@ -13,7 +13,7 @@ const STATUS_MAP = {
 
 const getStatus = (status) => STATUS_MAP[status] || { label: status, style: 'bg-gray-100 text-gray-700' };
 
-const TripHistory = () => {
+const JobStatusTracking = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [trips, setTrips] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -52,7 +52,7 @@ const TripHistory = () => {
 
             if (error) {
                
-                showToast("ไม่สามารถโหลดประวัติการเดินทางได้", "error");
+                showToast("ไม่สามารถโหลดสถานะงานได้", "error");
                 const { data: fallbackData } = await supabase
                     .from('support_tickets')
                     .select('*')
@@ -190,4 +190,4 @@ const TripHistory = () => {
     );
 };
 
-export default TripHistory;
+export default JobStatusTracking;

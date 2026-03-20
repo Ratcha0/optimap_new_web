@@ -41,6 +41,11 @@ export const useNavigation = ({
     const isWaitingRef = useRef(false);
     const simIndexRef = useRef(0);
     const is3DRef = useRef(is3D);
+    const isNavigatingRef = useRef(false);
+
+    useEffect(() => { 
+        isNavigatingRef.current = isNavigating; 
+    }, [isNavigating]);
 
     useEffect(() => { is3DRef.current = is3D; }, [is3D]);
 
@@ -61,6 +66,12 @@ export const useNavigation = ({
         routePath, routeLegs, navigationSteps, speak, 
         setCurrentInstruction, onLegComplete, onArrival, initialLegIndex
     });
+
+    const nextManeuverRef = useRef(nextManeuver || null);
+
+    useEffect(() => {
+        nextManeuverRef.current = nextManeuver;
+    }, [nextManeuver]);
 
     useEffect(() => { 
         isWaitingRef.current = isWaitingForContinue; 
@@ -188,8 +199,8 @@ export const useNavigation = ({
                 const iLat = prevPos[0] + (fLat - prevPos[0]) * ratio;
                 const iLng = prevPos[1] + (fLng - prevPos[1]) * ratio;
                 setTimeout(() => {
-                    if (!isNavigating) return;
-                    syncMap(iLat, iLng, pHeading, false, speedKmh, nextManeuver?.distance);
+                    if (!isNavigatingRef.current) return;
+                    syncMap(iLat, iLng, pHeading, false, speedKmh, nextManeuverRef.current?.distance);
                     setStartPoint([iLat, iLng]);
                 }, i * stepDuration);
             }

@@ -19,7 +19,7 @@ export const useGeolocation = (enabled = true) => {
         const startWatching = () => {
             if (!isMountedRef.current) return;
             
-            // If we've failed twice, try with High Accuracy DISABLED (fallback to Cell/WiFi)
+           
             const useHighAccuracy = retryCountRef.current < 2;
 
             watchIdRef.current = navigator.geolocation.watchPosition(
@@ -30,12 +30,12 @@ export const useGeolocation = (enabled = true) => {
                     setSpeed(s || 0);
                     setAccuracy(acc);
                     setError(null);
-                    retryCountRef.current = 0; // Reset on success
+                    retryCountRef.current = 0; 
                 },
                 (err) => {
                     setError(err.message);
                     
-                    // Code 3 is Timeout. Silencing it for users, only logging for debug
+                  
                     if (err.code === 3) {
                         if (retryCountRef.current === 0) {
                             console.log("Geolocation: Initial timeout, retrying...");
@@ -48,15 +48,15 @@ export const useGeolocation = (enabled = true) => {
                         navigator.geolocation.clearWatch(watchIdRef.current);
                         retryCountRef.current++;
                         
-                        // Longer delay before retrying (3-5 seconds) to let hardware rest
+                      
                         const delay = retryCountRef.current > 2 ? 5000 : 2000;
                         retryTimeoutRef.current = setTimeout(startWatching, delay);
                     }
                 },
                 {
                     enableHighAccuracy: useHighAccuracy,
-                    timeout: 30000, // Back to 30s to fail faster and fallback sooner
-                    maximumAge: 10000 
+                    timeout: 30000,
+                    maximumAge: 0 
                 }
             );
         };

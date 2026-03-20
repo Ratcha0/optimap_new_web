@@ -1,9 +1,6 @@
-const CACHE_NAME = 'optimap-v2';
-const TILE_CACHE = 'optimap-tiles-v1';
-const TILE_URLS = [
-    'tile.openstreetmap.org',
-    'basemaps.cartocdn.com'
-];
+const CACHE_NAME = 'optimap-v3';
+const TILE_CACHE = 'optimap-tiles-v2';
+const TILE_URLS = [];
 
 const STATIC_ASSETS = [
     '/',
@@ -43,7 +40,10 @@ self.addEventListener('fetch', (event) => {
         url.hostname.includes('routing.openstreetmap.de') ||
         url.hostname.includes('photon.komoot.io') ||
         url.hostname.includes('nominatim.openstreetmap.org') ||
-        url.hostname.includes('api.maptiler.com')
+        url.hostname.includes('api.maptiler.com') ||
+        url.hostname.includes('hf.space') ||
+        url.hostname.includes('basemaps.cartocdn.com') ||
+        url.hostname.includes('openstreetmap.org')
     ) {
         return;
     }
@@ -90,6 +90,7 @@ self.addEventListener('fetch', (event) => {
     if (
         urlStr.includes('localhost') || 
         urlStr.includes('ngrok') ||
+        urlStr.includes('supabase.co') ||
         urlStr.includes('@vite') || 
         urlStr.includes('@react-refresh') || 
         urlStr.includes('node_modules') || 
@@ -121,7 +122,7 @@ self.addEventListener('message', (event) => {
                         fetch(url, { priority: 'low' }).then(res => {
                             if (res.status === 200) cache.put(url, res);
                         }).catch(() => {
-                            // Suppress prefetch errors
+                           
                         });
                     }
                 }).catch(() => {});

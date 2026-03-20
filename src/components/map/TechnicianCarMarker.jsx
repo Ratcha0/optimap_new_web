@@ -5,6 +5,7 @@ import { EXTERNAL_LINKS } from '../../constants/api';
 import { APP_THEME } from '../../constants/visuals';
 import { getEngineStatusDisplay } from '../../utils/statusUtils';
 import { createRoot } from 'react-dom/client';
+
 import VehicleStatusDashboard from '../ui/VehicleStatusDashboard';
 
 const AdminTechPopupContent = ({ tech }) => {
@@ -58,45 +59,120 @@ const AdminTechPopupContent = ({ tech }) => {
 const TechnicianCarMarker = ({ map, tech, isAdminView = false }) => {
     const markerRef = useRef(null);
 
-    useEffect(() => {
-        if (!map || !tech?.last_lat || !tech?.last_lng) return;
+    const rootRef = useRef(null);
+    const popupRef = useRef(null);
+    
+    const carStatusData = Array.isArray(tech?.car_status) ? tech.car_status[0] : tech?.car_status;
+    const currentLat = isAdminView ? carStatusData?.lat : (carStatusData?.lat || tech?.last_lat);
+    const currentLng = isAdminView ? carStatusData?.lng : (carStatusData?.lng || tech?.last_lng);
 
+    // Initial Creation
+    useEffect(() => {
+        if (!map || !tech?.id || currentLat === undefined || currentLng === undefined) return;
+
+        const el = document.createElement('div');
+        el.className = 'tech-marker-premium-wrapper';
+        
+        const isMobile = window.innerWidth < 768;
+        popupRef.current = new maplibregl.Popup({ 
+            offset: 25, 
+            maxWidth: 'none', 
+            className: 'custom-vehicle-popup',
+            autoPan: false,
+            anchor: isMobile ? 'bottom' : 'left'
+        });
+
+        markerRef.current = new maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([currentLng, currentLat])
+            .setPopup(popupRef.current)
+            .addTo(map);
+
+        const popupNode = document.createElement('div');
+        popupNode.className = 'custom-popup-premium';
+        rootRef.current = createRoot(popupNode);
+        popupRef.current.setDOMContent(popupNode);
+
+        if (rootRef.current) {
+            rootRef.current.render(<AdminTechPopupContent tech={tech} />);
+        }
+
+        popupRef.current.on('open', () => {
+             requestAnimationFrame(() => {
+                 setTimeout(() => {
+                     const isMobile = window.innerWidth < 768;
+                     if (map && markerRef.current) {
+                         map.easeTo({
+                             center: markerRef.current.getLngLat(),
+                             offset: isMobile ? [0, 280] : [-150, 0],
+                             duration: 400
+                         });
+                     }
+                 }, 50);
+             });
+        });
+
+        return () => {
+            if (markerRef.current) markerRef.current.remove();
+            if (rootRef.current) {
+                const r = rootRef.current;
+                setTimeout(() => r.unmount(), 0);
+            }
+        };
+    }, [map]); 
+
+    // Global Styles (only once)
+    useEffect(() => {
+        const popupStyleId = 'custom-vehicle-popup-styles';
+        if (!document.getElementById(popupStyleId)) {
+            const style = document.createElement('style');
+            style.id = popupStyleId;
+            style.innerHTML = `
+                .custom-vehicle-popup { z-index: 5000 !important; max-width: none !important; }
+                .custom-vehicle-popup .maplibregl-popup-content { padding: 0 !important; border-radius: 20px !important; overflow: hidden; width: 320px; }
+                @media (max-width: 767px) {
+                    .custom-vehicle-popup .maplibregl-popup-content {
+                        width: 290px !important;
+                    }
+                }
+                @media (min-width: 768px) {
+                    .custom-vehicle-popup .maplibregl-popup-content {
+                        width: 450px !important;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    }, []);
+
+    // Data / Position Updates
+    useEffect(() => {
+        if (!markerRef.current || !tech || currentLat === undefined || currentLng === undefined) return;
+
+        // Update position
+        markerRef.current.setLngLat([currentLng, currentLat]);
+
+       
         const firstName = tech.full_name?.split(' ')[0] || 'ช่าง';
         let labelHtml = `<div style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);white-space:nowrap;background:rgba(255,255,255,0.95);color:#6b7280;font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.1);border:1.5px solid #e5e7eb;letter-spacing:0.3px;">${firstName}</div>`;
-        
         if (tech.is_primary && tech.active_ticket_id) {
             labelHtml = `<div style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);white-space:nowrap;background:linear-gradient(135deg,#3b82f6,#6366f1);color:white;font-size:9px;font-weight:900;padding:2px 8px;border-radius:10px;box-shadow:0 2px 8px rgba(59,130,246,0.4);border:1.5px solid white;letter-spacing:0.3px;">ทีม: ${firstName}</div>`;
         }
 
-        const el = document.createElement('div');
-        el.className = 'tech-marker-premium-wrapper';
+        const el = markerRef.current.getElement();
         el.innerHTML = `
-            <div class="relative flex items-center justify-center cursor-pointer group" style="width: 60px; height: 60px;">
+            <div class="relative flex items-center justify-center cursor-pointer group pointer-events-auto" style="width: 60px; height: 60px;">
                 <div class="absolute w-12 h-12 rounded-full opacity-20 animate-ping" style="background-color: ${APP_THEME.PRIMARY};"></div>
                 <img src="${technicianCar}" class="w-14 h-14 object-contain filter drop-shadow-xl z-10 transition-transform group-hover:scale-110" />
                 ${isAdminView ? labelHtml : ''}
             </div>
         `;
 
-        const popupNode = document.createElement('div');
-        popupNode.className = 'custom-popup-premium';
-        const root = createRoot(popupNode);
-        const popup = new maplibregl.Popup({ offset: 25, maxWidth: '300px', className: 'rounded-2xl' }).setDOMContent(popupNode);
+      
+        if (rootRef.current) {
+            rootRef.current.render(<AdminTechPopupContent tech={tech} />);
+        }
 
-        markerRef.current = new maplibregl.Marker({ element: el, anchor: 'center' })
-            .setLngLat([tech.last_lng, tech.last_lat])
-            .setPopup(popup)
-            .addTo(map);
-
-        popup.on('open', () => {
-            root.render(<AdminTechPopupContent tech={tech} />);
-        });
-
-        return () => {
-            if (markerRef.current) markerRef.current.remove();
-            if (root) setTimeout(() => root.unmount(), 0);
-        };
-    }, [map, tech, isAdminView]);
+    }, [tech, isAdminView]);
 
     return null;
 };

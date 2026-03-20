@@ -1,123 +1,110 @@
 import React from 'react';
-import { FiThermometer, FiZap, FiActivity, FiNavigation, FiDroplet } from 'react-icons/fi';
+import { 
+    FiThermometer, FiZap, FiActivity, FiNavigation, FiDroplet, 
+    FiWind, FiClock, FiCpu, FiAlertCircle, FiTag, FiBarChart2 
+} from 'react-icons/fi';
 import { getEngineStatusDisplay, STATUS_THRESHOLDS } from '../../utils/statusUtils';
+import VehicleGauge from './VehicleGauge';
 
-const VehicleStatusDashboard = ({ carStatus, isCollapsible = false }) => {
+const VehicleStatusDashboard = ({ carStatus }) => {
     if (!carStatus) return null;
 
     const status = getEngineStatusDisplay(carStatus);
 
+    const formatRuntime = (seconds) => {
+        if (!seconds) return '0h 0m';
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        return `${h}h ${m}m`;
+    };
+
     return (
-        <div className="bg-gray-50 rounded-xl p-2 border border-gray-100 space-y-2">
-            {!isCollapsible && (
-                <div className="flex items-center justify-between text-[8px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-200 pb-1 mb-0.5">
-                    <span>สถานะรถยนต์</span>
-                    <div className="flex items-center gap-1">
-                        <span className={`w-1 h-1 rounded-full ${status.dot} ${!status.isCritical ? 'animate-pulse' : ''}`}></span>
-                        <span className={`${status.color} font-black`}>{status.text}</span>
-                    </div>
+        <div className="bg-white rounded-2xl p-2 sm:p-4 border border-gray-100 shadow-sm space-y-3 sm:space-y-4 font-kanit w-full">
+            <div className="flex items-center justify-between border-b border-gray-50 pb-2">
+                <div className="flex flex-col">
+                    <span className="text-[11px] sm:text-xs font-black text-gray-400 uppercase tracking-widest">เลขตัวถัง (VIN)</span>
+                    <span className="text-sm sm:text-base font-black text-blue-600 font-mono">{carStatus.vin || 'N/A'}</span>
+                </div>
+                <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-xl">
+                    <span className={`w-2.5 h-2.5 rounded-full ${status.dot} animate-pulse`}></span>
+                    <span className={`${status.color} text-[11px] sm:text-xs font-black uppercase`}>{status.text}</span>
+                </div>
+            </div>
+
+            <div className="flex justify-around items-center py-2 bg-gray-50/50 rounded-2xl">
+                <VehicleGauge 
+                    value={carStatus.vehicle_speed || 0} 
+                    label="SPEED" 
+                    unit="KM/H" 
+                    max={220}
+                    color="#3b82f6"
+                    size={window.innerWidth >= 768 ? 120 : 100}
+                />
+                <VehicleGauge 
+                    value={carStatus.rpm || 0} 
+                    label="RPM" 
+                    unit="x1000" 
+                    max={8000}
+                    color="#6366f1"
+                    size={window.innerWidth >= 768 ? 120 : 100}
+                />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+                <StatItem icon={<FiCpu />} label="Load" value={`${Math.round(carStatus.engine_load || 0)}%`} color="text-orange-500" />
+                <StatItem icon={<FiActivity />} label="Throttle" value={`${Math.round(carStatus.throttle_pos || 0)}%`} color="text-emerald-500" />
+                <StatItem icon={<FiClock />} label="Runtime" value={formatRuntime(carStatus.engine_runtime)} color="text-purple-500" />
+                
+                <StatItem icon={<FiThermometer />} label="Coolant" value={`${Math.round(carStatus.engine_temp || 0)}°C`} color="text-rose-500" highlight={carStatus.engine_temp > STATUS_THRESHOLDS.ENGINE_TEMP} />
+                <StatItem icon={<FiWind />} label="Intake" value={`${Math.round(carStatus.intake_air_temp || 0)}°C`} color="text-blue-400" />
+                <StatItem icon={<FiThermometer />} label="Oil Temp" value={`${Math.round(carStatus.oil_temp || 0)}°C`} color="text-amber-600" />
+                
+                <StatItem icon={<FiWind />} label="Ambient" value={`${Math.round(carStatus.ambient_temp || 0)}°C`} color="text-teal-500" />
+                <StatItem icon={<FiBarChart2 />} label="Baro" value={`${(carStatus.barometric_pressure || 0).toFixed(1)}`} color="text-gray-500" unit="kPa" />
+                <StatItem icon={<FiDroplet />} label="Fuel Rate" value={`${(carStatus.fuel_rate || 0).toFixed(1)}`} color="text-orange-600" unit="L/h" />
+            </div>
+
+            <div className="space-y-2 pt-2 border-t border-gray-50">
+                <ProgressBar label="น้ำหม้อน้ำ" value={carStatus.water_level} color="bg-blue-500" threshold={STATUS_THRESHOLDS.WATER_LEVEL} />
+                <ProgressBar label="น้ำมันเครื่อง" value={carStatus.oil_level} color="bg-amber-800" threshold={STATUS_THRESHOLDS.OIL_LEVEL} />
+                <ProgressBar label="เชื้อเพลิง" value={carStatus.fuel_level} color="bg-orange-500" threshold={STATUS_THRESHOLDS.FUEL_LEVEL} />
+            </div>
+
+            {carStatus.distance_since_mil > 0 && (
+                <div className="flex items-center gap-2 bg-rose-50 p-2 rounded-xl border border-rose-100">
+                    <FiAlertCircle className="text-rose-500" size={14} />
+                    <span className="text-[10px] font-bold text-rose-700">Distance since MIL: {carStatus.distance_since_mil} KM</span>
                 </div>
             )}
-
-            <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-0.5">
-                    <div className="flex items-center gap-1 text-gray-400">
-                        <FiThermometer size={11} className={carStatus.engine_temp > STATUS_THRESHOLDS.ENGINE_TEMP ? "text-rose-500" : "text-blue-500"} />
-                        <span className="text-[8px] font-black uppercase tracking-tighter">ความร้อน</span>
-                    </div>
-                    <div className={`text-xs font-black ${carStatus.engine_temp > STATUS_THRESHOLDS.ENGINE_TEMP ? "text-rose-500 animate-pulse" : "text-gray-900"}`}>
-                        {carStatus.engine_temp?.toFixed(1) || '0.0'}°C
-                    </div>
-                </div>
-
-                <div className="space-y-0.5 border-l border-gray-200 pl-2">
-                    <div className="flex items-center gap-1 text-gray-400">
-                        <FiZap size={11} className={carStatus.battery_volt < STATUS_THRESHOLDS.BATTERY_VOLT ? "text-rose-500" : "text-amber-500"} />
-                        <span className="text-[8px] font-black uppercase tracking-tighter">แบตเตอรี่</span>
-                    </div>
-                    <div className={`text-xs font-black ${carStatus.battery_volt < STATUS_THRESHOLDS.BATTERY_VOLT ? "text-rose-500" : "text-gray-900"}`}>
-                        {carStatus.battery_volt?.toFixed(1) || '0.0'}V
-                    </div>
-                </div>
-
-                <div className="space-y-0.5">
-                    <div className="flex items-center gap-1 text-gray-400">
-                        <FiNavigation size={11} className="text-indigo-500" />
-                        <span className="text-[8px] font-black uppercase tracking-tighter">ความเร็ว</span>
-                    </div>
-                    <div className="text-xs font-black text-gray-900 leading-none">
-                        {Math.round(carStatus.vehicle_speed || 0)} KM/H
-                    </div>
-                </div>
-
-                <div className="space-y-0.5 border-l border-gray-200 pl-2">
-                    <div className="flex items-center gap-1 text-gray-400">
-                        <FiActivity size={11} className="text-emerald-500" />
-                        <span className="text-[8px] font-black uppercase tracking-tighter">เลขไมล์</span>
-                    </div>
-                    <div className="text-xs font-black text-gray-900 truncate">
-                        {(carStatus.odometer || 0).toLocaleString()} <span className="text-[7px]">KM</span>
-                    </div>
-                </div>
-            </div>
-
-            <div className="space-y-2 pt-0.5">
-                <div className="space-y-1">
-                    <div className="flex justify-between text-[8px] font-black text-gray-400 uppercase tracking-tighter">
-                        <div className="flex items-center gap-1">
-                            <FiDroplet size={10} className="text-blue-500" />
-                            <span>น้ำหม้อน้ำ</span>
-                        </div>
-                        <span className={carStatus.water_level < STATUS_THRESHOLDS.WATER_LEVEL ? "text-rose-600 font-black" : "text-gray-600"}>
-                            {Math.round(carStatus.water_level || 0)}%
-                        </span>
-                    </div>
-                    <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                            className={`h-full transition-all duration-500 rounded-full ${carStatus.water_level < STATUS_THRESHOLDS.WATER_LEVEL ? 'bg-rose-500' : 'bg-blue-500'}`}
-                            style={{ width: `${carStatus.water_level || 0}%` }}
-                        ></div>
-                    </div>
-                </div>
-
-                <div className="space-y-1">
-                    <div className="flex justify-between text-[8px] font-black text-gray-400 uppercase tracking-tighter">
-                        <div className="flex items-center gap-1">
-                            <FiDroplet size={10} className="text-amber-700" />
-                            <span>น้ำมันเครื่อง</span>
-                        </div>
-                        <span className={carStatus.oil_level < STATUS_THRESHOLDS.OIL_LEVEL ? "text-rose-600 font-black" : "text-gray-600"}>
-                            {Math.round(carStatus.oil_level || 0)}%
-                        </span>
-                    </div>
-                    <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                            className={`h-full transition-all duration-500 rounded-full ${carStatus.oil_level < STATUS_THRESHOLDS.OIL_LEVEL ? 'bg-rose-500' : 'bg-amber-800'}`}
-                            style={{ width: `${carStatus.oil_level || 0}%` }}
-                        ></div>
-                    </div>
-                </div>
-
-                <div className="space-y-1">
-                    <div className="flex justify-between text-[8px] font-black text-gray-400 uppercase tracking-tighter">
-                        <div className="flex items-center gap-1">
-                            <FiDroplet size={10} className="text-orange-500" />
-                            <span>เชื้อเพลิง</span>
-                        </div>
-                        <span className={carStatus.fuel_level < STATUS_THRESHOLDS.FUEL_LEVEL ? "text-rose-600 font-black" : "text-gray-600"}>
-                            {Math.round(carStatus.fuel_level || 0)}%
-                        </span>
-                    </div>
-                    <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                            className={`h-full transition-all duration-500 rounded-full ${carStatus.fuel_level < STATUS_THRESHOLDS.FUEL_LEVEL ? 'bg-rose-500' : 'bg-orange-500'}`}
-                            style={{ width: `${carStatus.fuel_level || 0}%` }}
-                        ></div>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 };
+
+const StatItem = ({ icon, label, value, color, unit, highlight }) => (
+    <div className="flex flex-col items-center p-2 sm:p-3 bg-gray-50/50 rounded-2xl border border-gray-100 transition-all hover:bg-gray-100/80">
+        <div className={`flex items-center gap-1.5 ${color} opacity-90 mb-1.5`}>
+            {React.cloneElement(icon, { size: 14 })}
+            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest">{label}</span>
+        </div>
+        <div className={`text-xs sm:text-base font-black ${highlight ? 'text-rose-600 animate-pulse' : 'text-gray-900'} leading-none`}>
+            {value} <span className="text-[9px] font-bold text-gray-400">{unit}</span>
+        </div>
+    </div>
+);
+
+const ProgressBar = ({ label, value, color, threshold }) => (
+    <div className="space-y-1.5">
+        <div className="flex justify-between text-[10px] sm:text-xs font-black text-gray-500 uppercase tracking-widest px-1">
+            <span>{label}</span>
+            <span className={value < threshold ? "text-rose-600 font-black animate-pulse" : "text-gray-700"}>{Math.round(value || 0)}%</span>
+        </div>
+        <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden border border-gray-50 p-0.5">
+            <div
+                className={`h-full transition-all duration-1000 rounded-full ${value < threshold ? 'bg-rose-500 shadow-lg shadow-rose-200' : color + ' shadow-sm'}`}
+                style={{ width: `${value || 0}%` }}
+            ></div>
+        </div>
+    </div>
+);
 
 export default VehicleStatusDashboard;

@@ -20,16 +20,18 @@ export default function AdminMap({ techs = [] }) {
             style: {
                 version: 8,
                 sources: {
-                    'osm': {
+                    'carto-voyager': {
                         type: 'raster',
-                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-                        tileSize: 256
+                        tiles: ['https://a.tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap contributors © CARTO'
                     }
                 },
-                layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
+                layers: [{ id: 'carto-voyager', type: 'raster', source: 'carto-voyager' }]
             },
             center: [MAP_CONFIG.DEFAULT_CENTER[1], MAP_CONFIG.DEFAULT_CENTER[0]],
             zoom: 10,
+            maxZoom: 19,
             pitch: 45
         });
 
@@ -46,13 +48,13 @@ export default function AdminMap({ techs = [] }) {
     const onlineTechs = techs.filter(t => t.last_updated && new Date(t.last_updated) > new Date(Date.now() - 5 * 60 * 1000));
 
     return (
-        <div className="w-full h-[600px] rounded-3xl overflow-hidden border border-gray-100 shadow-inner relative bg-gray-900">
+        <div className="w-full h-[calc(100vh-250px)] min-h-[500px] lg:h-[800px] rounded-3xl overflow-hidden border border-gray-100 shadow-inner relative bg-gray-900">
             <div ref={mapContainer} className="w-full h-full" />
             
             {mapReady && (
                 <>
                     <BranchMarkers map={map.current} showToast={showToast} />
-                    {techs.filter(tech => !tech.active_ticket_id || tech.is_primary).map(tech => (
+                    {techs.map(tech => (
                         <TechnicianCarMarker key={tech.id} map={map.current} tech={tech} isAdminView={true} />
                     ))}
                 </>

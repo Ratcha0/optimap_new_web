@@ -26,34 +26,35 @@ export const useMapSync = (mapInstance, is3D, isAutoSnapPaused) => {
 
             const speed = lastKnownSpeedRef.current || 0;
             
-            let targetZoom = 19;
-            if (speed > 110) targetZoom = 15.0;
-            else if (speed > 90) targetZoom = 16.0;
-            else if (speed > 70) targetZoom = 17.0;
-            else if (speed > 50) targetZoom = 17.8;
-            else if (speed > 30) targetZoom = 18.5;
-            else if (speed > 10) targetZoom = 19.0;
+            let targetZoom = 19.5;
+            if (speed > 100) targetZoom = 14.5;
+            else if (speed > 80) targetZoom = 15.5;
+            else if (speed > 60) targetZoom = 16.5;
+            else if (speed > 40) targetZoom = 17.5;
+            else if (speed > 20) targetZoom = 18.5;
+            else if (speed > 5) targetZoom = 19.5;
 
-            if (distToManeuver < 40) {
-                targetZoom = Math.min(20, targetZoom + 1.2); 
-            } else if (distToManeuver < 100) {
-                targetZoom = Math.min(19.5, targetZoom + 0.6);
+            if (distToManeuver < 50) {
+                targetZoom = Math.min(20.5, targetZoom + 1.5);
+            } else if (distToManeuver < 150) {
+                targetZoom = Math.min(20, targetZoom + 0.8);
             }
             
-            const smoothedZoom = force ? targetZoom : (currentZoom * 0.9 + targetZoom * 0.1); 
+            const smoothingFactor = speed > 40 ? 0.15 : 0.25;
+            const smoothedZoom = force ? targetZoom : (currentZoom * (1 - smoothingFactor) + targetZoom * smoothingFactor);
 
             const shouldUse3D = is3DRef.current;
             
-            let targetPitch = shouldUse3D ? 65 : 0;
+            let targetPitch = shouldUse3D ? 60 : 0;
             if (shouldUse3D) {
-                if (speed > 90) targetPitch = 35;
-                else if (speed > 60) targetPitch = 45;
-                else if (speed > 30) targetPitch = 55;
+                if (speed > 80) targetPitch = 30;
+                else if (speed > 50) targetPitch = 45;
+                else if (speed > 20) targetPitch = 55;
                 
-                if (distToManeuver < 60) targetPitch = 70;
+                if (distToManeuver < 80) targetPitch = 75;
             }
 
-            const offsetY = shouldUse3D ? window.innerHeight * 0.22 : window.innerHeight * 0.15; 
+            const offsetY = shouldUse3D ? window.innerHeight * 0.25 : window.innerHeight * 0.18; 
             const centerOffset = [0, offsetY];
 
             const commonOptions = {

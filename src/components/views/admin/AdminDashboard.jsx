@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../../utils/supabaseClient';
-import TripHistory from './TripHistory';
+import JobStatusTracking from './JobStatusTracking';
+import TripHistoryReal from './TripHistoryReal';
 import OverviewTab from './OverviewTab';
 import TechnicianList from './TechnicianList';
-import JobList from './JobList';
 import StatCard from './StatCard';
 import AdminMap from './AdminMap';
 import UserProfile from '../../modals/UserProfile';
@@ -19,7 +19,8 @@ import {
     FiLogOut,
     FiMenu,
     FiX,
-    FiMap
+    FiMap,
+    FiList
 } from 'react-icons/fi';
 
 const AdminDashboard = ({ user, userProfile }) => {
@@ -32,6 +33,7 @@ const AdminDashboard = ({ user, userProfile }) => {
     });
 
     const [techs, setTechs] = useState([]);
+    const [mapTechs, setMapTechs] = useState([]);
     const [users, setUsers] = useState([]);
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -88,20 +90,37 @@ const AdminDashboard = ({ user, userProfile }) => {
         if (!user?.id) return;
         if (!silent) setLoading(true);
         try {
-            // Merge profile fetches into one request
-            const { data: allProfiles, error: profErr } = await supabase
-                .from('profiles')
-                .select('*, car_status(*)');
+        
+            const [{ data: allProfiles, error: profErr }, { data: allCarStatusData }] = await Promise.all([
+                supabase.from('profiles').select('*'),
+                supabase.from('car_status').select('*')
+            ]);
+            
+            const allCarStatus = allCarStatusData || [];
             
             if (profErr) throw profErr;
 
-            const currentProfile = allProfiles.find(p => p.id === user.id);
+            // Map car status to profiles by VIN (with fallback for simulation and legacy ID matching)
+            const mappedProfiles = allProfiles.map(p => {
+                const derivedVin = p.vin || `SIM-${p.id.substring(0, 8).toUpperCase()}`;
+                
+                // Try to find status by VIN first, then fallback to ID for legacy data
+                let carStatus = allCarStatus?.find(cs => cs.vin === derivedVin);
+                if (!carStatus) {
+                    carStatus = allCarStatus?.find(cs => cs.id === p.id);
+                }
+
+                return {
+                    ...p,
+                    car_status: carStatus ? [carStatus] : []
+                };
+            });
+
+            const currentProfile = mappedProfiles.find(p => p.id === user.id);
             if (currentProfile) setLocalProfile(currentProfile);
 
-            const rawTechs = allProfiles.filter(p => p.role === 'technician');
-            const currentUsers = allProfiles.filter(p => p.role === 'user');
-
-            // Get active tickets and their assignments in parallel
+            const rawTechs = mappedProfiles.filter(p => p.role === 'technician');
+            const currentUsers = mappedProfiles.filter(p => p.role === 'user');
             const [ticketsRes, assignmentsRes] = await Promise.all([
                 supabase.from('support_tickets')
                     .select('id, technician_id, status, issue_type')
@@ -141,9 +160,27 @@ const AdminDashboard = ({ user, userProfile }) => {
                 return { ...tech, active_ticket_id: null, is_primary: false, team_leader_name: null, team_member_count: 0 };
             });
 
-            
+            const mapTechsList = allCarStatus
+                .filter(cs => cs.lat !== undefined && cs.lat !== null && cs.lng !== undefined && cs.lng !== null)
+                .map(cs => {
+                    const derivedVinFromProfile = (p) => p.vin || `SIM-${p.id.substring(0, 8).toUpperCase()}`;
+                    const profile = allProfiles.find(p => derivedVinFromProfile(p) === cs.vin || p.id === cs.vin || p.id === cs.id);
+                    return {
+                        id: profile?.id || cs.vin || Math.random().toString(),
+                        full_name: profile?.full_name || `กล่องรถ: ${cs.vin}`,
+                        role: 'technician',
+                        last_lat: cs.lat,
+                        last_lng: cs.lng,
+                        avatar_url: profile?.avatar_url || null,
+                        car_reg: profile?.car_reg || 'ไม่ระบุ',
+                        team_name: profile?.team_name || '-',
+                        is_primary: false,
+                        car_status: [cs]
+                    };
+                });
 
             setTechs(currentTechs);
+            setMapTechs(mapTechsList);
             setUsers(currentUsers);
             const { data: detailedJobs, error: detailedErr } = await supabase
                 .from('support_tickets')
@@ -166,7 +203,6 @@ const AdminDashboard = ({ user, userProfile }) => {
             }
             setJobs(finalJobs);
 
-       
             const usersWithJobs = currentUsers.map(u => ({
                 ...u,
                 jobCount: finalJobs.filter(j => j.user_id === u.id).length
@@ -259,9 +295,9 @@ const AdminDashboard = ({ user, userProfile }) => {
                 <nav className="flex-1 space-y-2">
                     <SidebarItem id="overview" icon={FiActivity} label="ภาพรวมระบบ" />
                     <SidebarItem id="trips" icon={FiClock} label="ประวัติการเดินทาง" />
+                    <SidebarItem id="job-status" icon={FiList} label="ติดตามสถานะงาน" />
                     <SidebarItem id="technicians" icon={FiUsers} label="จัดการช่าง" />
                     <SidebarItem id="users" icon={FiUsers} label="จัดการผู้ใช้" />
-                    <SidebarItem id="jobs" icon={FiBox} label="งานทั้งหมด" />
                     <div className="my-6 border-t border-gray-100" />
                     <SidebarItem id="map" icon={FiMap} label="แผนที่" />
                 </nav>
@@ -318,9 +354,9 @@ const AdminDashboard = ({ user, userProfile }) => {
                         <h2 className="text-3xl font-black text-gray-900 tracking-tight">
                             {activeTab === 'overview' && 'รายละเอียด'}
                             {activeTab === 'trips' && 'ประวัติการเดินทาง'}
+                            {activeTab === 'job-status' && 'ติดตามสถานะงาน'}
                             {activeTab === 'technicians' && 'จัดการช่าง'}
                             {activeTab === 'users' && 'จัดการผู้ใช้'}
-                            {activeTab === 'jobs' && 'งานทั้งหมด'}
                             {activeTab === 'map' && 'ตำแหน่งช่างแบบเรียลไทม์'}
                         </h2>
                     </div>
@@ -346,7 +382,7 @@ const AdminDashboard = ({ user, userProfile }) => {
                     </div>
                 )}
 
-                <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 p-2 sm:p-6 min-h-[400px] sm:min-h-[600px]">
+                <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 p-2 sm:p-6 min-h-[500px] lg:min-h-[800px]">
                     {loading ? (
                         <div className="flex items-center justify-center h-64">
                             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -354,7 +390,8 @@ const AdminDashboard = ({ user, userProfile }) => {
                     ) : (
                         <>
                             {activeTab === 'overview' && <OverviewTab techs={techs} jobs={jobs} />}
-                            {activeTab === 'trips' && <TripHistory />}
+                            {activeTab === 'trips' && <TripHistoryReal />}
+                            {activeTab === 'job-status' && <JobStatusTracking />}
                             {activeTab === 'technicians' && (
                                 <TechnicianList
                                     techs={techs}
@@ -373,14 +410,7 @@ const AdminDashboard = ({ user, userProfile }) => {
                                     type="user"
                                 />
                             )}
-                            {activeTab === 'jobs' && (
-                                <JobList
-                                    jobs={jobs}
-                                    searchTerm={jobSearch}
-                                    setSearchTerm={setJobSearch}
-                                />
-                            )}
-                            {activeTab === 'map' && <AdminMap techs={techs} />}
+                            {activeTab === 'map' && <AdminMap techs={mapTechs} />}
                         </>
                     )}
                 </div>

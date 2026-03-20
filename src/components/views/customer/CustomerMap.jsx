@@ -5,6 +5,7 @@ import { MAP_CONFIG } from '../../../constants/visuals';
 import { EXTERNAL_LINKS } from '../../../constants/api';
 import technicialcar from '../../../assets/technicialcar.png';
 import { createRoot } from 'react-dom/client';
+
 import VehicleStatusDashboard from '../../ui/VehicleStatusDashboard';
 
 
@@ -265,15 +266,34 @@ const CustomerMap = ({
                 const popupNode = document.createElement('div');
                 popupNode.className = 'custom-popup-premium';
                 const root = createRoot(popupNode);
-                const popup = new maplibregl.Popup({ offset: 25, maxWidth: '300px', className: 'rounded-2xl', closeButton: true }).setDOMContent(popupNode);
+                const isMobile = window.innerWidth < 768;
+                const popup = new maplibregl.Popup({ 
+                    offset: 25, 
+                    maxWidth: 'none', 
+                    className: 'custom-vehicle-popup', 
+                    closeButton: true,
+                    autoPan: false,
+                    anchor: isMobile ? 'bottom' : 'left'
+                }).setDOMContent(popupNode);
 
                 const marker = new maplibregl.Marker({ element: el })
                     .setLngLat(pos)
                     .setPopup(popup)
                     .addTo(map.current);
 
+                root.render(<TechnicianPopupContent tech={tech} />);
+
                 popup.on('open', () => {
-                    root.render(<TechnicianPopupContent tech={tech} />);
+                     setTimeout(() => {
+                         const isMobile = window.innerWidth < 768;
+                         if (map.current) {
+                             map.current.easeTo({
+                                 center: pos,
+                                 offset: isMobile ? [0, 280] : [-150, 0],
+                                 duration: 400
+                             });
+                         }
+                     }, 50);
                 });
 
                 markersRef.current.techs[tech.id] = { marker, root, techData: JSON.stringify(tech) };
@@ -282,9 +302,11 @@ const CustomerMap = ({
                 e.marker.setLngLat(pos);
                 
                
-                if (e.marker.getPopup().isOpen() && e.techData !== JSON.stringify(tech)) {
+                
+                const newTechData = JSON.stringify(tech);
+                if (e.techData !== newTechData) {
                     e.root.render(<TechnicianPopupContent tech={tech} />);
-                    e.techData = JSON.stringify(tech);
+                    e.techData = newTechData;
                 }
             }
         });
@@ -510,24 +532,37 @@ const CustomerMap = ({
         <div className="w-full h-full relative">
             <div ref={mapContainer} className="w-full h-full" />
             <style>{`
-                .maplibregl-popup {
+                .custom-vehicle-popup {
                     z-index: 5000 !important;
+                    max-width: none !important;
                 }
-                .maplibregl-popup-content {
+                .custom-vehicle-popup .maplibregl-popup-content {
                     padding: 0 !important;
                     border-radius: 20px !important;
                     overflow: hidden;
                     box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
+                    width: 320px;
+                }
+                @media (min-width: 1024px) {
+                    .custom-vehicle-popup .maplibregl-popup-content {
+                        width: 450px !important;
+                    }
                 }
                 .maplibregl-popup-close-button {
                     width: 24px;
                     height: 24px;
                     background: white !important;
-                    border-radius: 50%;
-                    top: 8px;
-                    right: 8px;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-                    color: #9ca3af;
+                    border-radius: 50% !important;
+                    top: 8px !important;
+                    right: 8px !important;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
+                    color: #9ca3af !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    z-index: 100 !important;
+                    border: none !important;
+                    font-size: 16px !important;
                 }
             `}</style>
         </div>

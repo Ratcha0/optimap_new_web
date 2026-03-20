@@ -66,7 +66,7 @@ export default function SearchControl({ onResultSelect, currentPosition }) {
         <div className="w-[95%] sm:w-full sm:max-w-[1000px] relative z-[1000] flex flex-col gap-2">
             <div className="flex bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-xl overflow-hidden group focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
                 <div className="relative flex-grow flex items-center">
-                    <div className="pl-3 sm:pl-4 text-gray-400">
+                    <div className="pl-4 sm:pl-4 text-gray-400">
                         <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>

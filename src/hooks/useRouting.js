@@ -6,7 +6,6 @@ import { ROUTING_API } from '../constants/api';
 
 const PRIMARY_OSRM = ROUTING_API.LOCAL_OSRM;
 const SECONDARY_OSRM = ROUTING_API.OSRM_PRO;
-const FALLBACK_OSRM = ROUTING_API.OSM_CAR;
 
 export const useRouting = ({
     startPoint,
@@ -39,11 +38,25 @@ export const useRouting = ({
     const abortControllerRef = useRef(null); 
     const routingCache = useRef({});
     const locationNamesRef = useRef(locationNames);
-    
+  
+    const startPointRef = useRef(startPoint);
+    const [fetchTrigger, setFetchTrigger] = useState(0);
+    const isMountedRef = useRef(true);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => { isMountedRef.current = false; };
+    }, []);
+
    
     useEffect(() => {
         locationNamesRef.current = locationNames;
     }, [locationNames]);
+
+    
+    useEffect(() => {
+        startPointRef.current = startPoint;
+    }, [startPoint]);
 
 
     const clearRoute = useCallback(() => {
@@ -59,13 +72,33 @@ export const useRouting = ({
     }, []);
 
 
-
     useEffect(() => {
+        setFetchTrigger(prev => prev + 1);
+    }, [waypoints, tripType, isNavigating, rerouteTrigger, completedWaypoints, originalStart, currentLegIndex]);
+
+   
+    useEffect(() => {
+        if (!startPoint) return;
+        const prev = startPointRef.current;
+        if (!prev || (!lastRoutedPos.current && routePath.length === 0)) {
+            setFetchTrigger(p => p + 1);
+            return;
+        }
+        if (!isNavigating) return;
+        const dist = calculateDistance(startPoint[0], startPoint[1], lastRoutedPos.current[0], lastRoutedPos.current[1]);
+        if (dist >= 25) {
+            setFetchTrigger(p => p + 1);
+        }
+    }, [startPoint, isNavigating]);
+
+    
+    useEffect(() => {
+        const currentStart = startPointRef.current;
         const validWpsWithIndexes = waypoints
             .map((wp, i) => ({ coords: wp, origIdx: i }))
             .filter(item => item.coords !== null);
 
-        if (!startPoint || validWpsWithIndexes.length === 0) {
+        if (!currentStart || validWpsWithIndexes.length === 0) {
             if (routePath.length > 0) {
                 setTimeout(clearRoute, 0);
             }
@@ -78,7 +111,7 @@ export const useRouting = ({
 
         if (!waypointsChanged && lastRoutedPos.current && !error && routePath.length > 0) {
             if (isNavigating && rerouteTrigger === 0) return;
-            const dist = calculateDistance(startPoint[0], startPoint[1], lastRoutedPos.current[0], lastRoutedPos.current[1]);
+            const dist = calculateDistance(currentStart[0], currentStart[1], lastRoutedPos.current[0], lastRoutedPos.current[1]);
             if (!isNavigating && dist < 25) return;
         }
 
@@ -89,12 +122,12 @@ export const useRouting = ({
             activeWps = activeWps.filter(w => !completedWaypoints.has(w.origIdx));
         }
 
-        const coordsForApi = [startPoint, ...activeWps.map(w => w.coords)];
+        const coordsForApi = [currentStart, ...activeWps.map(w => w.coords)];
         const inputIndicesMap = [-1, ...activeWps.map(w => w.origIdx)];
 
        
         if (tripType === 'roundtrip') {
-            const origin = originalStart || startPoint;
+            const origin = originalStart || currentStart;
             coordsForApi.push(origin);
             inputIndicesMap.push(-2);
         }
@@ -112,7 +145,8 @@ export const useRouting = ({
         const cacheKey = coordStr + `-${apiPath}-` + (isNavigating ? 'nav' : 'pre');
 
         const processData = (data) => {
-            lastRoutedPos.current = startPoint;
+            lastRoutedPos.current = currentStart;
+
 
             let route;
             let waypointsMeta = null;
@@ -239,6 +273,7 @@ export const useRouting = ({
             if (abortControllerRef.current) abortControllerRef.current.abort();
             
             lastFetchTimeRef.current = now;
+
             setIsLoading(true);
             setError(null);
 
@@ -264,19 +299,21 @@ export const useRouting = ({
 
             const attemptFetch = async () => {
                 try {
-                    // ทดสอบ Server ของเราเองโดยตรง ปิดเส้นทางสำรอง
-                    const data = await fetchOsrm(PRIMARY_OSRM);
-                    /* 
-                    const data = await Promise.any([
-                        fetchOsrm(PRIMARY_OSRM),
-                        fetchOsrm(SECONDARY_OSRM)
-                    ]);
-                    */
+                    
+                    let data;
+                    try {
+                        data = await fetchOsrm(PRIMARY_OSRM);
+                    } catch (primaryErr) {
+                        console.warn("Primary OSRM failed or is still building, falling back to Secondary...", primaryErr);
+                        data = await fetchOsrm(SECONDARY_OSRM);
+                    }
+                    
 
                     clearTimeout(timeoutId);
                     routingCache.current[cacheKey] = { data, time: Date.now() };
                     processData(data);
                 } catch (err) {
+
                     if (err.name === 'AbortError' || abortController.signal.aborted) return;
                     
                     if (retryCount < MAX_RETRIES) {
@@ -285,25 +322,25 @@ export const useRouting = ({
                         await new Promise(resolve => setTimeout(resolve, 1500));
                         return attemptFetch();
                     }
-                    setError("เซิร์ฟเวอร์คำนวณเส้นทางขัดข้อง โปรดลองใหม่");
+                    if (isMountedRef.current) setError("เซิร์ฟเวอร์คำนวณเส้นทางขัดข้อง โปรดลองใหม่");
                 } finally {
                     clearTimeout(timeoutId);
-                    setIsLoading(false);
+                    if (isMountedRef.current) setIsLoading(false);
                 }
             };
 
             attemptFetch();
         };
 
-        if (isOnline) {
-            debounceTimerRef.current = setTimeout(performFetch, 200);
+        if (isOnline !== false) {
+            debounceTimerRef.current = setTimeout(performFetch, 500);
         }
         
         return () => {
             if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
             if (abortControllerRef.current) abortControllerRef.current.abort();
         };
-    }, [startPoint, waypoints, tripType, isNavigating, rerouteTrigger, completedWaypoints, originalStart, currentLegIndex, setRerouteTrigger, clearRoute, isOnline]);
+    }, [fetchTrigger, clearRoute, isOnline]);
 
     return { routeLegs, routePath, segments, distance, totalDuration, navigationSteps, visitOrder, legTargetIndices, clearRoute, isLoading, error };
 };

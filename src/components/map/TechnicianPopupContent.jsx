@@ -14,7 +14,7 @@ const TechnicianPopupContent = ({ tech, allTechs }) => {
     const statusDisplay = carStatusData ? getEngineStatusDisplay(carStatusData) : null;
 
     return (
-        <div className="p-1 flex flex-col gap-3 min-w-[280px] max-h-[60vh] overflow-y-auto thin-scrollbar font-kanit">
+        <div className="p-1 flex flex-col gap-3 min-w-[300px] sm:min-w-[420px] max-h-[60vh] sm:max-h-none overflow-y-auto thin-scrollbar font-kanit">
              <div className="flex items-center gap-3">
                 <div className="relative">
                     <img 
@@ -28,13 +28,13 @@ const TechnicianPopupContent = ({ tech, allTechs }) => {
                     />
                 </div>
                 <div className="min-w-0 flex-1">
-                    <div className="text-[9px] font-black text-blue-500 uppercase tracking-widest leading-none mb-1">
+                    <div className="text-[10px] sm:text-[11px] font-black text-blue-500 uppercase tracking-widest leading-none mb-1.5">
                         {tech.is_primary && tech.active_ticket_id ? 'ช่างรับงานหลัก' :
                          tech.team_leader_name ? 'ช่างร่วมทีม' : 
                          tech.active_ticket_id ? 'ช่างรับงานหลัก' : 'ช่างเทคนิค'}
                     </div>
-                    <div className="text-sm font-black text-gray-900 leading-none truncate">{tech.full_name}</div>
-                    <div className="text-[9px] text-gray-400 font-bold mt-1">
+                    <div className="text-base sm:text-lg font-black text-gray-900 leading-none truncate">{tech.full_name}</div>
+                    <div className="text-[11px] sm:text-xs text-gray-400 font-bold mt-1.5">
                         {tech.team_name || 'ศูนย์บริการ'} • {tech.car_reg || 'ไม่ระบุทะเบียน'}
                     </div>
                 </div>
@@ -113,8 +113,8 @@ const TechnicianPopupContent = ({ tech, allTechs }) => {
             <div className="pt-1.5 border-t border-gray-100">
                 {!tech.is_me && tech.phone && (
                     <a href={`tel:${tech.phone}`}
-                        className="flex w-full bg-green-600 hover:bg-green-500 text-white font-black h-9 rounded-xl text-[11px] items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-green-500/10 uppercase tracking-widest no-underline border-none cursor-pointer">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        className="flex w-full bg-green-600 hover:bg-green-500 text-white font-black h-11 sm:h-12 rounded-xl text-xs sm:text-sm items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-green-500/10 uppercase tracking-widest no-underline border-none cursor-pointer">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                         </svg>
                         ติดต่อช่าง

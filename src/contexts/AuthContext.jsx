@@ -11,10 +11,10 @@ export const AuthProvider = ({ children }) => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             (event, session) => {
                 if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
-                     // Ensure clean state
+                   
                      setUser(null);
                      setLoading(false);
-                     // Clear any local storage auth tokens if Supabase doesn't do it automatically
+                   
                      Object.keys(localStorage).forEach(key => {
                          if (key.startsWith('sb-')) localStorage.removeItem(key);
                      });
@@ -22,18 +22,18 @@ export const AuthProvider = ({ children }) => {
                     setUser(session?.user ?? null);
                     setLoading(false);
                 } else if (event === 'INITIAL_SESSION') {
-                     // Handle initial load
+                
                      setUser(session?.user ?? null);
                      setLoading(false);
                 }
             }
         );
 
-        // Check initial session
+
         supabase.auth.getSession().then(({ data: { session }, error }) => {
             if (error) {
                 console.error("Auth session error:", error);
-                // If token is invalid (e.g. refresh token not found), force logout logic
+               
                 if (error.message && (error.message.includes("Refresh Token") || error.message.includes("Invalid"))) {
                     supabase.auth.signOut();
                     setUser(null);

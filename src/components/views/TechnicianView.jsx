@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
-import { supabase } from '../../utils/supabaseClient';
+
 import { useWakeLock } from '../../hooks/useWakeLock';
 import { useNavigation } from '../../hooks/useNavigation';
 import { useRouting } from '../../hooks/useRouting';
 import { useTechnicianData } from '../../hooks/useTechnicianData';
-import { useCarStatusSimulator } from '../../hooks/useCarStatusSimulator';
+import { useCarStatusReporter } from '../../hooks/useCarStatusReporter';
 import { reverseGeocode, formatTime, parseCoordinateUrl } from '../../utils/mapUtils';
 import { speak } from '../../utils/voiceUtils';
 import { MAP_CONFIG } from '../../constants/visuals';
@@ -92,6 +92,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
     const [navActive, setNavActive] = useState(() => localStorage.getItem(PERSISTENCE_KEYS.IS_NAVIGATING) === 'true');
     const [isImmersive, setIsImmersive] = useState(() => localStorage.getItem(PERSISTENCE_KEYS.IS_IMMERSIVE) === 'true');
     const [autoSnapPaused, setAutoSnapPaused] = useState(false);
+    const lastSyncedPosRef = useRef(null);
     const [currentSpeed, setCurrentSpeed] = useState(0);
     const [gpsAccuracy, setGpsAccuracy] = useState(null);
     const [originalStart, setOriginalStart] = useState(() => {
@@ -118,11 +119,13 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         unreadMessagesCount,
         setUnreadMessagesCount,
         syncPosition,
+        logLocation,
         carStatus,
         isOnline
-    } = useTechnicianData(user);
+    } = useTechnicianData(user, userProfile);
 
     const startPointRef = useRef(startPoint);
+    const arrivalNotifiedRef = useRef(null);
     useEffect(() => { startPointRef.current = startPoint; }, [startPoint]);
 
 
@@ -151,7 +154,6 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         speak("กำลังคำนวณเส้นทางใหม่ค่ะ");
         setRerouteTrigger(prev => prev + 1);
     }, []);
-
 
     const handleLegComplete = useCallback((navLegIndex) => {
         const waypointIndexToMark = legTargetIndices[navLegIndex];
@@ -191,6 +193,11 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         continueNavigation: hookContinueNav
     } = nav;
 
+    const continueNavigation = useCallback(() => {
+        hookContinueNav();
+        if (startPoint) logLocation(startPoint);
+    }, [hookContinueNav, startPoint, logLocation]);
+
     const { clearPersistence } = useTechnicianPersistence({
         startPoint, waypoints, locationNames, tripType,
         completedWaypoints, currentLegIndex, navActive, isImmersive,
@@ -200,10 +207,14 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
 
     useEffect(() => {
         const savedVersion = localStorage.getItem(PERSISTENCE_KEYS.STORAGE_VERSION);
-        if (savedVersion !== STORAGE_VERSION) {
-            Object.values(PERSISTENCE_KEYS).forEach(k => localStorage.removeItem(k));
+        if (savedVersion && savedVersion !== STORAGE_VERSION) {
             localStorage.setItem(PERSISTENCE_KEYS.STORAGE_VERSION, STORAGE_VERSION);
+            Object.values(PERSISTENCE_KEYS).forEach(k => {
+                if (k !== PERSISTENCE_KEYS.STORAGE_VERSION) localStorage.removeItem(k);
+            });
             window.location.reload();
+        } else if (!savedVersion) {
+            localStorage.setItem(PERSISTENCE_KEYS.STORAGE_VERSION, STORAGE_VERSION);
         }
     }, []);
 
@@ -256,17 +267,16 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
     }, [hookStopNav, clearRoute]);
 
     const handleContinueNavigation = useCallback(() => {
-     
+        if (startPoint) logLocation(startPoint);
         if (routeLegs && currentLegIndex < routeLegs.length - 1) {
              const nextLeg = currentLegIndex + 1;
              setCurrentLegIndex(nextLeg);
              hookContinueNav(); 
         } else {
-             
              stopNavigation();
              showToast('ถึงจุดหมายปลายทางเรียบร้อยแล้ว', 'success');
         }
-    }, [currentLegIndex, routeLegs, hookContinueNav, stopNavigation, showToast]);
+    }, [currentLegIndex, routeLegs, hookContinueNav, stopNavigation, showToast, startPoint, logLocation]);
 
 
     useEffect(() => { setNavActive(isNavigating); }, [isNavigating]);
@@ -280,7 +290,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
     }, [isNavigating]);
 
     useWakeLock(isNavigating);
-    useCarStatusSimulator(user, userProfile, isNavigating, currentSpeed, { eta, distance_remaining: remainingDistance });
+    useCarStatusReporter(user, userProfile, isNavigating, currentSpeed, { eta, distance_remaining: remainingDistance });
    
     const liveDistance = isNavigating ? (remainingDistance / 1000).toFixed(2) : distance;
    
@@ -295,15 +305,16 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
     useEffect(() => {
         if (!isNavigating && startPoint && waypoints.length > 0 && waypoints[0]) {
             const dest = waypoints[0];
+            const destKey = `${dest[0]},${dest[1]}`;
             const dist = calculateDistance(startPoint[0], startPoint[1], dest[0], dest[1]);
 
-            if (dist <= 10) {
-                setWaypoints([null]);
-                clearRoute();
-                const msg = 'ถึงที่หมายแล้วค่ะ';
+            if (dist <= 10 && arrivalNotifiedRef.current !== destKey) {
+                arrivalNotifiedRef.current = destKey;
+                const msg = 'คุณถึงที่หมายแล้วค่ะ';
                 showToast(`🏠 ${msg}`, 'success');
                 speak(msg);
-                setMapRemountKey(prev => prev + 1);
+            } else if (dist > 10) {
+                arrivalNotifiedRef.current = null;
             }
         }
     }, [startPoint, waypoints, isNavigating, clearRoute, showToast]);
@@ -313,9 +324,21 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         if (!user) return;
         const interval = setInterval(() => {
             if (startPointRef.current) {
-                syncPosition(startPointRef.current);
+                const cur = startPointRef.current;
+                const last = lastSyncedPosRef.current;
+                
+                let shouldSync = !last;
+                if (last) {
+                    const dist = calculateDistance(cur[0], cur[1], last[0], last[1]);
+                    if (dist > 15) shouldSync = true;
+                }
+
+                if (shouldSync) {
+                    syncPosition(cur);
+                    lastSyncedPosRef.current = cur;
+                }
             }
-        }, 5000);
+        }, 10000);
 
         return () => clearInterval(interval);
     }, [user, syncPosition]);
@@ -325,26 +348,29 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
         hookStartNav();
         setAutoSnapPaused(false);
         setIsImmersive(true);
+        if (startPoint) logLocation(startPoint);
         speak("เริ่มนำทางค่ะ ขอให้เดินทางโดยสวัสดิภาพ");
-    }, [startPoint, hookStartNav, speak]);
+    }, [startPoint, hookStartNav, speak, logLocation]);
 
     const simulateNavigation = useCallback(() => {
         setOriginalStart(startPoint);
         hookSimNav();
         setAutoSnapPaused(false);
         setIsImmersive(true);
+        if (startPoint) logLocation(startPoint);
         speak("เริ่มระบบจำลองค่ะ");
-    }, [startPoint, hookSimNav, speak]);
+    }, [startPoint, hookSimNav, speak, logLocation]);
 
 
 
     const handleStopNavigation = useCallback(() => {
+        if (startPoint) logLocation(startPoint);
         stopNavigation();
         if (rawLocation) {
             setStartPoint(rawLocation);
             syncPosition(rawLocation);
         }
-    }, [stopNavigation, syncPosition, rawLocation]);
+    }, [stopNavigation, syncPosition, rawLocation, startPoint, logLocation]);
 
     const updateLocationName = useCallback(async (key, lat, lng, providedName = null) => {
         if (providedName) setLocationNames(prev => ({ ...prev, [key]: providedName }));
@@ -595,7 +621,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
 
 
                 {!isNavigating && !isImmersive && !activeSelection && (
-                    <div className="absolute top-14 sm:top-20 left-1/2 -translate-x-1/2 w-[90%] max-w-lg z-[1000]">
+                    <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 w-[90%] max-w-lg z-[1000]">
                         <SearchControl
                             onResultSelect={(res) => {
                                 setSearchResult(res);
@@ -738,6 +764,7 @@ export default function TechnicianView({ user, userProfile, sharedLocation }) {
             <ArrivalOverlay
                 isVisible={isWaitingForContinue}
                 onContinue={handleContinueNavigation}
+                onStop={handleStopNavigation}
             />
 
             <TeamInviteNotification
